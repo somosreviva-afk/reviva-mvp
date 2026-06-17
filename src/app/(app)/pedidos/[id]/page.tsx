@@ -155,10 +155,29 @@ export default function PedidoDetailPage() {
               </div>
             </>
           )}
-          <div className="flex justify-between font-bold text-gray-900">
-            <span>Total</span>
+          <div className="flex justify-between font-bold text-gray-900 mb-3">
+            <span>Valor da Venda</span>
             <span className="text-lg">{formatCurrency(pedido.valor_total)}</span>
           </div>
+          {pedido.forma_pagamento && (
+            <div className={`rounded-xl px-3 py-2.5 flex justify-between items-center ${
+              pedido.forma_pagamento === 'pix' ? 'bg-green-50' : 'bg-purple-50'
+            }`}>
+              <div>
+                <p className={`text-xs font-semibold uppercase tracking-wide mb-0.5 ${
+                  pedido.forma_pagamento === 'pix' ? 'text-green-600' : 'text-purple-600'
+                }`}>
+                  {pedido.forma_pagamento === 'pix' ? '💚 Pix' : '🔗 Link de Pagamento'}
+                </p>
+                <p className="text-xs text-gray-500">Valor Recebido</p>
+              </div>
+              <span className={`text-lg font-bold ${
+                pedido.forma_pagamento === 'pix' ? 'text-green-700' : 'text-purple-700'
+              }`}>
+                {formatCurrency(pedido.valor_recebido ?? pedido.valor_total)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

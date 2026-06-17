@@ -10,6 +10,7 @@ interface ItemPedido {
   produto_id: string
   nome: string
   preco_unitario: number
+  preco_liquido: number
   quantidade: number
 }
 
@@ -31,11 +32,17 @@ export default function NovoPedidoPage() {
   const [freteValor, setFreteValor] = useState('')
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
+  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link_pagamento'>('pix')
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const descontoValor = parseFloat(desconto) || 0
   const freteVal = parseFloat(freteValor) || 0
   const total = Math.max(0, subtotal - descontoValor + freteVal)
+
+  const subtotalLiquido = itens.reduce((s, i) => s + (i.preco_liquido || i.preco_unitario) * i.quantidade, 0)
+  const valorRecebido = formaPagamento === 'pix'
+    ? total
+    : Math.max(0, subtotalLiquido - descontoValor + freteVal)
 
   useEffect(() => {
     async function carregar() {
@@ -46,7 +53,7 @@ export default function NovoPedidoPage() {
 
       const [{ data: c }, { data: p }] = await Promise.all([
         supabase.from('clientes').select('id, nome, whatsapp').eq('empresa_id', usuario!.empresa_id).order('nome'),
-        supabase.from('produtos').select('id, nome, preco_venda, estoque').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
+        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, estoque').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
       ])
       setClientes(c || [])
       setProdutos(p || [])
@@ -65,7 +72,13 @@ export default function NovoPedidoPage() {
     if (existe) {
       setItens(itens.map(i => i.produto_id === p.id ? { ...i, quantidade: i.quantidade + 1 } : i))
     } else {
-      setItens([...itens, { produto_id: p.id, nome: p.nome, preco_unitario: p.preco_venda, quantidade: 1 }])
+      setItens([...itens, {
+        produto_id: p.id,
+        nome: p.nome,
+        preco_unitario: p.preco_venda,
+        preco_liquido: p.preco_liquido || p.preco_venda,
+        quantidade: 1
+      }])
     }
     setMostrarProdutos(false)
     setBuscaProduto('')
@@ -106,6 +119,8 @@ export default function NovoPedidoPage() {
       transportadora: transportadora || null,
       prazo_entrega: prazoEntrega || null,
       valor_total: total,
+      forma_pagamento: formaPagamento,
+      valor_recebido: valorRecebido,
     }).select().single()
 
     if (error || !pedido) {
@@ -114,7 +129,6 @@ export default function NovoPedidoPage() {
       return
     }
 
-    // Inserir itens
     const itensData = itens.map(i => ({
       pedido_id: pedido.id,
       produto_id: i.produto_id,
@@ -134,6 +148,8 @@ export default function NovoPedidoPage() {
   const produtosFiltrados = produtos.filter(p =>
     p.nome.toLowerCase().includes(buscaProduto.toLowerCase())
   )
+
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
   return (
     <div className="p-4">
@@ -168,6 +184,38 @@ export default function NovoPedidoPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Forma de Pagamento */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento *</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setFormaPagamento('pix')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+              formaPagamento === 'pix'
+                ? 'border-green-500 bg-green-50 text-green-700'
+                : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            💚 Pix
+          </button>
+          <button
+            onClick={() => setFormaPagamento('link_pagamento')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+              formaPagamento === 'link_pagamento'
+                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            🔗 Link de Pagamento
+          </button>
+        </div>
+        {formaPagamento === 'link_pagamento' && (
+          <p className="text-xs text-purple-600 mt-2 bg-purple-50 rounded-lg px-3 py-2">
+            O valor recebido será calculado pelo preço líquido de cada produto (após taxa da plataforma).
+          </p>
+        )}
       </div>
 
       {/* Cliente */}
@@ -256,9 +304,7 @@ export default function NovoPedidoPage() {
                     className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 flex justify-between"
                   >
                     <span>{p.nome}</span>
-                    <span className="text-green-600 font-medium">
-                      {p.preco_venda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
+                    <span className="text-green-600 font-medium">{fmt(p.preco_venda)}</span>
                   </button>
                 ))}
               </div>
@@ -303,7 +349,7 @@ export default function NovoPedidoPage() {
                     className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500"
                   />
                   <span className="text-sm font-semibold text-gray-900 ml-auto">
-                    {(item.preco_unitario * item.quantidade).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {fmt(item.preco_unitario * item.quantidade)}
                   </span>
                 </div>
               </div>
@@ -392,25 +438,31 @@ export default function NovoPedidoPage() {
         <div className="bg-green-600 rounded-2xl p-4 mb-4 text-white">
           <div className="flex justify-between text-sm text-green-200 mb-1">
             <span>Subtotal</span>
-            <span>{subtotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            <span>{fmt(subtotal)}</span>
           </div>
           {descontoValor > 0 && (
             <div className="flex justify-between text-sm text-green-200 mb-1">
               <span>Desconto</span>
-              <span>- {descontoValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <span>- {fmt(descontoValor)}</span>
             </div>
           )}
           {freteVal > 0 && (
             <div className="flex justify-between text-sm text-green-200 mb-1">
               <span>Frete</span>
-              <span>+ {freteVal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+              <span>+ {fmt(freteVal)}</span>
             </div>
           )}
-          <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center">
-            <span className="font-medium">Total</span>
-            <span className="text-2xl font-bold">
-              {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
+            <span className="font-medium">Valor da Venda</span>
+            <span className="text-2xl font-bold">{fmt(total)}</span>
+          </div>
+          <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
+            formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'
+          }`}>
+            <span className="text-sm font-medium">
+              {formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}
             </span>
+            <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
           </div>
         </div>
       )}
