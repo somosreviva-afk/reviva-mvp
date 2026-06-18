@@ -101,11 +101,18 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const codigo = pedido.codigo_rastreio || rastreio
-    const mensagem =
-      `Olá, ${nome}! 💖\n\n` +
-      `Seu pedido já foi enviado e está a caminho.\n\n` +
-      `Código de rastreio:\n${codigo}\n\n` +
-      `Assim você poderá acompanhar toda a entrega. ✨`
+    const e1 = String.fromCodePoint(0x1F496) // 💖
+    const e2 = String.fromCodePoint(0x2728)  // ✨
+    const mensagem = [
+      `Olá, ${nome}! ${e1}`,
+      ``,
+      `Seu pedido já foi enviado e está a caminho.`,
+      ``,
+      `Código de rastreio:`,
+      codigo,
+      ``,
+      `Assim você poderá acompanhar toda a entrega. ${e2}`,
+    ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
@@ -127,7 +134,8 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const dataEntrega = pedido.data_entrega ? `\nEntrega: ${formatDate(pedido.data_entrega)}` : ''
     const listaItens = itens.map(i => `• ${i.nome_produto} x${i.quantidade} — ${formatCurrency(i.subtotal)}`).join('\n')
-    const mensagem = `Olá ${pedido.clientes.nome}! 👋\n\nSeu pedido #${pedido.numero}:\n${listaItens}${dataEntrega}\n\n*Total: ${formatCurrency(pedido.valor_total)}*\n\nStatus: ${STATUS_LABELS[pedido.status]}`
+    const oi = String.fromCodePoint(0x1F44B) // 👋
+    const mensagem = `Olá ${pedido.clientes.nome}! ${oi}\n\nSeu pedido #${pedido.numero}:\n${listaItens}${dataEntrega}\n\n*Total: ${formatCurrency(pedido.valor_total)}*\n\nStatus: ${STATUS_LABELS[pedido.status]}`
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
@@ -136,10 +144,10 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const link = pedido.link_pasta_drive
-    const coracao = '\u{1F496}'
-    const estrela = '✨'
-    const camera = '\u{1F4F8}'
-    const ok = '✅'
+    const coracao = String.fromCodePoint(0x1F496) // 💖
+    const estrela = String.fromCodePoint(0x2728)  // ✨
+    const camera = String.fromCodePoint(0x1F4F8)  // 📸
+    const ok = String.fromCodePoint(0x2705)        // ✅
     const mensagem = [
       `Olá, ${nome}! ${coracao}`,
       ``,
