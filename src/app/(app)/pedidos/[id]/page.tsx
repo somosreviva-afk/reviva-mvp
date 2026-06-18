@@ -7,6 +7,7 @@ import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2 } from 'l
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
+import { descontarEstoque } from '@/lib/utils/estoque'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -53,6 +54,20 @@ export default function PedidoDetailPage() {
     setAtualizando(true)
     const supabase = createClient()
     await supabase.from('pedidos').update({ status: novoStatus }).eq('id', id)
+
+    // Baixa automática de estoque ao mover para produção
+    if (novoStatus === 'producao' && pedido && !pedido.estoque_descontado && Number(pedido.qtd_imas) > 0) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', user!.id).single()
+      const { data: cfg } = await supabase
+        .from('configuracoes_materiais')
+        .select('impressao_fotos_por_folha')
+        .eq('empresa_id', usuario!.empresa_id)
+        .single()
+      const fotosPerFolha = cfg?.impressao_fotos_por_folha || 12
+      await descontarEstoque(supabase, usuario!.empresa_id, Number(pedido.qtd_imas), fotosPerFolha, id)
+    }
+
     await carregar()
     setAtualizando(false)
   }

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils/formatters'
-import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera, AlertTriangle, Boxes } from 'lucide-react'
 import Link from 'next/link'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -101,6 +101,16 @@ async function getDashboardData(empresaId: string) {
       .limit(5),
   ])
 
+  // Estoque baixo
+  const { data: insumos } = await supabase
+    .from('insumos')
+    .select('nome, quantidade, estoque_minimo, unidade')
+    .eq('empresa_id', empresaId)
+
+  const insumosBaixos = (insumos || []).filter(
+    (i: any) => Number(i.estoque_minimo) > 0 && Number(i.quantidade) < Number(i.estoque_minimo)
+  )
+
   return {
     total_entrou: totalEntrou,
     custo_material: custoMaterial,
@@ -112,6 +122,8 @@ async function getDashboardData(empresaId: string) {
     total_pedidos_mes: totalPedidosMes,
     pedidos_andamento: (pedidosAbertos || []).length,
     pedidos_recentes: pedidosRecentes || [],
+    total_insumos: (insumos || []).length,
+    insumos_baixos: insumosBaixos,
   }
 }
 
@@ -255,6 +267,49 @@ export default async function DashboardPage() {
           <p className="text-lg font-bold text-green-700">{formatCurrency(dados.total_entrou)}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">pix + link no mês</p>
         </div>
+      </div>
+
+      {/* Estoque */}
+      {dados.insumos_baixos.length > 0 && (
+        <Link href="/estoque" className="block bg-orange-50 border border-orange-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-orange-500" />
+            <p className="text-sm font-semibold text-orange-700">
+              ⚠️ {dados.insumos_baixos.length} material(is) com estoque baixo
+            </p>
+          </div>
+          <div className="space-y-0.5">
+            {dados.insumos_baixos.slice(0, 3).map((i: any) => (
+              <p key={i.nome} className="text-xs text-orange-600">
+                • {i.nome}: {Number(i.quantidade).toFixed(0)} {i.unidade}
+              </p>
+            ))}
+          </div>
+          <p className="text-xs text-orange-500 mt-2 font-medium">Toque para ver estoque →</p>
+        </Link>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/estoque" className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm block">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center mb-3">
+            <Boxes size={18} className="text-amber-700" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">📦 Total Insumos</p>
+          <p className="text-lg font-bold text-amber-700">{dados.total_insumos}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">tipos cadastrados</p>
+        </Link>
+        <Link href="/estoque" className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm block">
+          <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center mb-3">
+            <AlertTriangle size={18} className="text-red-500" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">⚠️ Para Repor</p>
+          <p className={`text-lg font-bold ${dados.insumos_baixos.length > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+            {dados.insumos_baixos.length}
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            {dados.insumos_baixos.length > 0 ? 'itens abaixo do mínimo' : 'tudo ok'}
+          </p>
+        </Link>
       </div>
 
       {/* Pedidos em aberto */}

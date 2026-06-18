@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Package } from 'lucide-react'
+import { Plus, Package, Boxes } from 'lucide-react'
 import Link from 'next/link'
 
 function formatCurrency(value: number) {
@@ -61,7 +61,7 @@ export default function ProdutosPage() {
 
   return (
     <div className="p-4">
-      <div className="flex items-center justify-between pt-4 mb-4">
+      <div className="flex items-center justify-between pt-4 mb-3">
         <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
         <Link
           href="/produtos/novo"
@@ -71,6 +71,18 @@ export default function ProdutosPage() {
           Novo
         </Link>
       </div>
+
+      {/* Link para estoque de insumos */}
+      <Link
+        href="/estoque"
+        className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 mb-4 shadow-sm"
+      >
+        <div className="flex items-center gap-2">
+          <Boxes size={18} className="text-orange-500" />
+          <span className="text-sm font-semibold text-gray-700">📦 Estoque de Insumos</span>
+        </div>
+        <span className="text-xs text-gray-400">Ver →</span>
+      </Link>
 
       {produtos.length === 0 ? (
         <div className="text-center py-16">

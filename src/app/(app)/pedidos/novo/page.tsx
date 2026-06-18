@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Trash2, Search } from 'lucide-react'
 import Link from 'next/link'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
+import { descontarEstoque } from '@/lib/utils/estoque'
 
 interface ItemPedido {
   produto_id: string
@@ -178,6 +179,18 @@ export default function NovoPedidoPage() {
     }))
 
     await supabase.from('itens_pedido').insert(itensData)
+
+    // Baixa automática de estoque (apenas se não for orçamento e tiver ímãs)
+    if (status !== 'orcamento' && custos.qtd_imas > 0) {
+      await descontarEstoque(
+        supabase,
+        usuario!.empresa_id,
+        custos.qtd_imas,
+        configMateriais.impressao_fotos_por_folha,
+        pedido.id
+      )
+    }
+
     router.push(`/pedidos/${pedido.id}`)
   }
 
