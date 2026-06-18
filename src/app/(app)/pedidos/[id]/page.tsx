@@ -101,17 +101,18 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const codigo = pedido.codigo_rastreio || rastreio
-    const e1 = String.fromCodePoint(0x1F496) // 💖
-    const e2 = String.fromCodePoint(0x2728)  // ✨
     const mensagem = [
-      `Olá, ${nome}! ${e1}`,
+      `Ola, ${nome}!`,
       ``,
-      `Seu pedido já foi enviado e está a caminho.`,
+      `Seu pedido ja foi enviado e esta a caminho.`,
       ``,
-      `Código de rastreio:`,
+      `Codigo de rastreio:`,
       codigo,
       ``,
-      `Assim você poderá acompanhar toda a entrega. ${e2}`,
+      `Acompanhe sua entrega pelo site dos Correios:`,
+      `https://rastreamento.correios.com.br`,
+      ``,
+      `Qualquer duvida estou a disposicao.`,
     ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
@@ -134,8 +135,7 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const dataEntrega = pedido.data_entrega ? `\nEntrega: ${formatDate(pedido.data_entrega)}` : ''
     const listaItens = itens.map(i => `• ${i.nome_produto} x${i.quantidade} — ${formatCurrency(i.subtotal)}`).join('\n')
-    const oi = String.fromCodePoint(0x1F44B) // 👋
-    const mensagem = `Olá ${pedido.clientes.nome}! ${oi}\n\nSeu pedido #${pedido.numero}:\n${listaItens}${dataEntrega}\n\n*Total: ${formatCurrency(pedido.valor_total)}*\n\nStatus: ${STATUS_LABELS[pedido.status]}`
+    const mensagem = `Ola ${pedido.clientes.nome}!\n\nSeu pedido #${pedido.numero}:\n${listaItens}${dataEntrega}\n\n*Total: ${formatCurrency(pedido.valor_total)}*\n\nStatus: ${STATUS_LABELS[pedido.status]}`
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
@@ -144,27 +144,22 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const link = pedido.link_pasta_drive
-    const coracao = String.fromCodePoint(0x1F496) // 💖
-    const estrela = String.fromCodePoint(0x2728)  // ✨
-    const camera = String.fromCodePoint(0x1F4F8)  // 📸
-    const ok = String.fromCodePoint(0x2705)        // ✅
     const mensagem = [
-      `Olá, ${nome}! ${coracao}`,
+      `Ola, ${nome}!`,
       ``,
-      `Recebemos seu pedido e sua pasta exclusiva já foi criada.`,
+      `Recebemos seu pedido e sua pasta exclusiva ja foi criada.`,
       ``,
       `Para manter a qualidade original das fotos, envie diretamente pelo link abaixo:`,
-      ``,
       link,
       ``,
-      `${camera} *Como enviar pelo celular:*`,
+      `*Como enviar pelo celular:*`,
       `1. Abra o link acima`,
-      `2. Toque no botão "+" ou "Fazer upload"`,
+      `2. Toque no botao + ou Fazer upload`,
       `3. Escolha as fotos da sua galeria`,
       `4. Aguarde o upload concluir`,
       ``,
-      `Assim que recebermos as fotos iniciamos a produção! ${estrela}`,
-      `Qualquer dúvida estou à disposição. ${ok}`,
+      `Assim que recebermos as fotos iniciamos a producao!`,
+      `Qualquer duvida estou a disposicao.`,
     ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
