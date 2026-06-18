@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils/formatters'
-import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera, AlertTriangle, Boxes } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera, AlertTriangle, Boxes, CheckCircle2, Send } from 'lucide-react'
 import Link from 'next/link'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -85,8 +85,8 @@ async function getDashboardData(empresaId: string) {
   const lucro = lucroRealSalvo > 0 ? lucroRealSalvo : totalEntrou - custoMaterial - totalCorreio
   const margemPct = totalEntrou > 0 ? (lucro / totalEntrou) * 100 : 0
 
-  // Pedidos ativos e recentes
-  const [{ data: pedidosAbertos }, { data: pedidosRecentes }] = await Promise.all([
+  // Pedidos ativos, recentes e por status de envio
+  const [{ data: pedidosAbertos }, { data: pedidosRecentes }, { data: pedidosEnviados }, { data: pedidosTransporte }, { data: pedidosFinalizados }] = await Promise.all([
     supabase
       .from('pedidos')
       .select('id')
@@ -99,6 +99,21 @@ async function getDashboardData(empresaId: string) {
       .not('status', 'in', '(entregue,cancelado)')
       .order('created_at', { ascending: false })
       .limit(5),
+    supabase
+      .from('pedidos')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .eq('status', 'enviado'),
+    supabase
+      .from('pedidos')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .in('status', ['producao', 'enviado']),
+    supabase
+      .from('pedidos')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .in('status', ['entregue', 'finalizado']),
   ])
 
   // Estoque baixo
@@ -121,6 +136,9 @@ async function getDashboardData(empresaId: string) {
     total_imas: totalImas,
     total_pedidos_mes: totalPedidosMes,
     pedidos_andamento: (pedidosAbertos || []).length,
+    pedidos_enviados: (pedidosEnviados || []).length,
+    pedidos_transporte: (pedidosTransporte || []).length,
+    pedidos_finalizados: (pedidosFinalizados || []).length,
     pedidos_recentes: pedidosRecentes || [],
     total_insumos: (insumos || []).length,
     insumos_baixos: insumosBaixos,
@@ -267,6 +285,31 @@ export default async function DashboardPage() {
           <p className="text-lg font-bold text-green-700">{formatCurrency(dados.total_entrou)}</p>
           <p className="text-[10px] text-gray-400 mt-0.5">pix + link no mês</p>
         </div>
+      </div>
+
+      {/* Indicadores de Envio */}
+      <div className="grid grid-cols-3 gap-2">
+        <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
+          <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center mb-2">
+            <Send size={15} className="text-blue-600" />
+          </div>
+          <p className="text-[10px] text-gray-500 mb-0.5">📦 Enviados</p>
+          <p className="text-base font-bold text-blue-700">{dados.pedidos_enviados}</p>
+        </Link>
+        <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
+          <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center mb-2">
+            <Truck size={15} className="text-orange-600" />
+          </div>
+          <p className="text-[10px] text-gray-500 mb-0.5">🚚 Transporte</p>
+          <p className="text-base font-bold text-orange-700">{dados.pedidos_transporte}</p>
+        </Link>
+        <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
+          <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center mb-2">
+            <CheckCircle2 size={15} className="text-green-600" />
+          </div>
+          <p className="text-[10px] text-gray-500 mb-0.5">✅ Finalizados</p>
+          <p className="text-base font-bold text-green-700">{dados.pedidos_finalizados}</p>
+        </Link>
       </div>
 
       {/* Estoque */}

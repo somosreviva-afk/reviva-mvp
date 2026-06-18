@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2, FolderOpen, Camera } from 'lucide-react'
+import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2, FolderOpen, Camera, Package, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
@@ -19,7 +19,8 @@ export default function PedidoDetailPage() {
   const [configMateriais, setConfigMateriais] = useState<ConfigMateriais>(CONFIG_PADRAO)
   const [atualizando, setAtualizando] = useState(false)
   const [rastreio, setRastreio] = useState('')
-  const [salvandoRastreio, setSalvandoRastreio] = useState(false)
+  const [dataPostagem, setDataPostagem] = useState('')
+  const [salvandoEnvio, setSalvandoEnvio] = useState(false)
 
   async function carregar() {
     const supabase = createClient()
@@ -33,6 +34,7 @@ export default function PedidoDetailPage() {
     setPedido(p)
     setItens(i || [])
     setRastreio(p?.codigo_rastreio || '')
+    setDataPostagem(p?.data_postagem || '')
     if (cfg) {
       setConfigMateriais({
         ima_custo: Number(cfg.ima_custo),
@@ -72,12 +74,39 @@ export default function PedidoDetailPage() {
     setAtualizando(false)
   }
 
-  async function salvarRastreio() {
-    setSalvandoRastreio(true)
+  async function salvarEnvio() {
+    setSalvandoEnvio(true)
     const supabase = createClient()
-    await supabase.from('pedidos').update({ codigo_rastreio: rastreio || null }).eq('id', id)
-    setSalvandoRastreio(false)
-    alert('Rastreio salvo!')
+    const update: any = {
+      codigo_rastreio: rastreio || null,
+      data_postagem: dataPostagem || null,
+    }
+    // Auto-muda status para 'enviado' ao cadastrar rastreio
+    if (rastreio && pedido?.status && !['enviado', 'entregue', 'cancelado'].includes(pedido.status)) {
+      update.status = 'enviado'
+    }
+    await supabase.from('pedidos').update(update).eq('id', id)
+    await carregar()
+    setSalvandoEnvio(false)
+  }
+
+  function rastrearPedido() {
+    if (!rastreio && !pedido?.codigo_rastreio) return
+    const codigo = rastreio || pedido.codigo_rastreio
+    window.open(`https://rastreamento.correios.com.br/app/index.php?objetos=${codigo}`, '_blank')
+  }
+
+  function informarEnvio() {
+    if (!pedido?.clientes?.whatsapp) return
+    const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
+    const nome = pedido.clientes.nome
+    const codigo = pedido.codigo_rastreio || rastreio
+    const mensagem =
+      `Olá, ${nome}! 💖\n\n` +
+      `Seu pedido já foi enviado e está a caminho.\n\n` +
+      `Código de rastreio:\n${codigo}\n\n` +
+      `Assim você poderá acompanhar toda a entrega. ✨`
+    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
   async function cancelar() {
@@ -283,7 +312,7 @@ export default function PedidoDetailPage() {
         </div>
       </div>
 
-      {/* Frete */}
+      {/* Frete — info */}
       {(pedido.transportadora || pedido.frete_valor > 0) && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
@@ -310,29 +339,68 @@ export default function PedidoDetailPage() {
               </div>
             )}
           </div>
-
-          {/* Rastreio */}
-          <div className="mt-4 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Código de rastreio</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={rastreio}
-                onChange={e => setRastreio(e.target.value)}
-                placeholder="Ex: BR123456789BR"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              <button
-                onClick={salvarRastreio}
-                disabled={salvandoRastreio}
-                className="bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
-              >
-                {salvandoRastreio ? '...' : 'Salvar'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
+
+      {/* Envio e Rastreamento */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Package size={15} className="text-blue-500" />
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Envio e Rastreamento</p>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">Data de Postagem</p>
+            <input
+              type="date"
+              value={dataPostagem}
+              onChange={e => setDataPostagem(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">Código de Rastreio</p>
+            <input
+              type="text"
+              value={rastreio}
+              onChange={e => setRastreio(e.target.value)}
+              placeholder="Ex: BR123456789BR"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+          <button
+            onClick={salvarEnvio}
+            disabled={salvandoEnvio}
+            className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 active:scale-95 transition-all"
+          >
+            {salvandoEnvio ? 'Salvando...' : 'Salvar dados de envio'}
+          </button>
+        </div>
+
+        {/* Botões de ação — aparecem quando tem código */}
+        {(pedido.codigo_rastreio || rastreio) && (
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+            <button
+              onClick={rastrearPedido}
+              className="w-full flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-3 text-sm font-medium text-blue-800 active:scale-95 transition-all"
+            >
+              <Truck size={16} className="text-blue-600 flex-shrink-0" />
+              <span className="flex-1">🚚 Rastrear Pedido</span>
+              <ChevronRight size={14} className="text-blue-400" />
+            </button>
+            {pedido.clientes?.whatsapp && (
+              <button
+                onClick={informarEnvio}
+                className="w-full flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm font-medium text-green-800 active:scale-95 transition-all"
+              >
+                <MessageCircle size={16} className="text-green-600 flex-shrink-0" />
+                <span className="flex-1">📲 Informar Envio ao Cliente</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Custos e Lucro */}
       {custosSalvos && custosSalvos.custo_total_pedido > 0 && (
