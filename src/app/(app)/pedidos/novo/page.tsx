@@ -31,7 +31,7 @@ export default function NovoPedidoPage() {
   const [mostrarProdutos, setMostrarProdutos] = useState(false)
   const [dataEntrega, setDataEntrega] = useState('')
   const [observacoes, setObservacoes] = useState('')
-  const [status, setStatus] = useState('orcamento')
+  const [status, setStatus] = useState('aguardando_fotos')
   const [desconto, setDesconto] = useState('')
   const [freteValor, setFreteValor] = useState('')
   const [transportadora, setTransportadora] = useState('')
@@ -180,6 +180,27 @@ export default function NovoPedidoPage() {
 
     await supabase.from('itens_pedido').insert(itensData)
 
+    // Cria pasta no Google Drive automaticamente
+    try {
+      const driveRes = await fetch('/api/drive/criar-pasta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nomeCliente: clienteSelecionado.nome,
+          numeroPedido: pedido.numero,
+        }),
+      })
+      const driveData = await driveRes.json()
+      if (driveData.link && driveData.folderId) {
+        await supabase.from('pedidos').update({
+          link_pasta_drive: driveData.link,
+          pasta_drive_id: driveData.folderId,
+        }).eq('id', pedido.id)
+      }
+    } catch {
+      // Drive não configurado ou erro — continua sem o link
+    }
+
     // Baixa automática de estoque (apenas se não for orçamento e tiver ímãs)
     if (status !== 'orcamento' && custos.qtd_imas > 0) {
       await descontarEstoque(
@@ -219,25 +240,26 @@ export default function NovoPedidoPage() {
         <label className="block text-sm font-medium text-gray-700 mb-2">Status inicial</label>
         <div className="flex gap-2 flex-wrap">
           {[
-            { value: 'orcamento', label: 'Orçamento', color: 'orange' },
-            { value: 'aprovado', label: 'Aprovado', color: 'blue' },
-            { value: 'producao', label: 'Em Produção', color: 'yellow' },
+            { value: 'aguardando_fotos', label: '🟡 Aguardando Fotos', cls: 'bg-yellow-500' },
+            { value: 'orcamento', label: 'Orçamento', cls: 'bg-orange-500' },
+            { value: 'producao', label: '🟣 Em Produção', cls: 'bg-purple-500' },
           ].map(s => (
             <button
               key={s.value}
               onClick={() => setStatus(s.value)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                status === s.value
-                  ? s.color === 'orange' ? 'bg-orange-500 text-white'
-                  : s.color === 'blue' ? 'bg-blue-500 text-white'
-                  : 'bg-yellow-500 text-white'
-                  : 'bg-gray-100 text-gray-600'
+                status === s.value ? `${s.cls} text-white` : 'bg-gray-100 text-gray-600'
               }`}
             >
               {s.label}
             </button>
           ))}
         </div>
+        {status === 'aguardando_fotos' && (
+          <p className="text-xs text-yellow-700 bg-yellow-50 rounded-lg px-3 py-2 mt-2">
+            📁 Uma pasta no Google Drive será criada automaticamente para o cliente enviar as fotos.
+          </p>
+        )}
       </div>
 
       {/* Forma de Pagamento */}

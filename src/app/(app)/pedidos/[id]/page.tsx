@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2, FolderOpen, Camera } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
@@ -102,6 +102,21 @@ export default function PedidoDetailPage() {
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
+  function enviarSolicitacaoFotos() {
+    if (!pedido?.clientes?.whatsapp || !pedido?.link_pasta_drive) return
+    const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
+    const nome = pedido.clientes.nome
+    const link = pedido.link_pasta_drive
+    const mensagem =
+      `Olá, ${nome}! 💖\n\n` +
+      `Recebemos seu pedido e sua pasta exclusiva já foi criada.\n\n` +
+      `Para manter a qualidade original das fotos, envie suas imagens diretamente pelo link abaixo:\n\n` +
+      `${link}\n\n` +
+      `Assim que recebermos as fotos iniciaremos a produção dos seus ímãs personalizados. ✨\n\n` +
+      `Qualquer dúvida estou à disposição. 💕`
+    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
@@ -178,6 +193,39 @@ export default function PedidoDetailPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Pasta Google Drive */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <FolderOpen size={15} className="text-yellow-500" />
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pasta do Cliente</p>
+        </div>
+        {pedido.link_pasta_drive ? (
+          <div className="space-y-2">
+            <a
+              href={pedido.link_pasta_drive}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-3 text-sm font-medium text-yellow-800 active:scale-95 transition-all"
+            >
+              <FolderOpen size={16} className="text-yellow-600 flex-shrink-0" />
+              <span className="flex-1">🔗 Abrir Pasta no Drive</span>
+              <ChevronRight size={14} className="text-yellow-500" />
+            </a>
+            {pedido.clientes?.whatsapp && (
+              <button
+                onClick={enviarSolicitacaoFotos}
+                className="w-full flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-sm font-medium text-green-800 active:scale-95 transition-all"
+              >
+                <Camera size={16} className="text-green-600 flex-shrink-0" />
+                <span className="flex-1">📲 Enviar Solicitação de Fotos</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400 italic">Pasta não criada (configure o Google Drive em Configurações)</p>
+        )}
       </div>
 
       {/* Itens */}

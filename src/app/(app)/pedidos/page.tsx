@@ -3,7 +3,7 @@ import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS } from '@/lib/
 import { Plus, ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 
-const STATUS_ORDER = ['orcamento', 'aprovado', 'producao', 'finalizado', 'entregue']
+const STATUS_ORDER = ['aguardando_fotos', 'orcamento', 'aprovado', 'producao', 'enviado', 'finalizado', 'entregue']
 
 export default async function PedidosPage() {
   const supabase = await createClient()
