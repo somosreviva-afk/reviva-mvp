@@ -1,55 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils/formatters'
-import { TrendingUp, DollarSign, ShoppingBag, TrendingDown, Settings } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package } from 'lucide-react'
 import Link from 'next/link'
-
-async function getDashboardData(empresaId: string) {
-  const supabase = await createClient()
-  const hoje = new Date()
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-    .toISOString()
-    .split('T')[0]
-
-  const [{ data: entradas }, { data: saidas }, { data: pedidosAbertos }, { data: pedidosRecentes }] =
-    await Promise.all([
-      supabase
-        .from('financeiro')
-        .select('valor')
-        .eq('empresa_id', empresaId)
-        .eq('tipo', 'entrada')
-        .gte('data', inicioMes),
-      supabase
-        .from('financeiro')
-        .select('valor')
-        .eq('empresa_id', empresaId)
-        .eq('tipo', 'saida')
-        .gte('data', inicioMes),
-      supabase
-        .from('pedidos')
-        .select('id')
-        .eq('empresa_id', empresaId)
-        .in('status', ['aprovado', 'producao']),
-      supabase
-        .from('pedidos')
-        .select('id, numero, status, valor_total, data_pedido, clientes(nome)')
-        .eq('empresa_id', empresaId)
-        .not('status', 'in', '(entregue,cancelado)')
-        .order('created_at', { ascending: false })
-        .limit(5),
-    ])
-
-  const totalEntradas = (entradas || []).reduce((s, r) => s + Number(r.valor), 0)
-  const totalSaidas = (saidas || []).reduce((s, r) => s + Number(r.valor), 0)
-
-  return {
-    vendas_mes: totalEntradas,
-    gastos_mes: totalSaidas,
-    lucro_mes: totalEntradas - totalSaidas,
-    caixa_atual: totalEntradas - totalSaidas,
-    pedidos_andamento: (pedidosAbertos || []).length,
-    pedidos_recentes: pedidosRecentes || [],
-  }
-}
 
 const STATUS_LABELS: Record<string, string> = {
   orcamento: 'Orçamento',
@@ -67,6 +19,84 @@ const STATUS_COLORS: Record<string, string> = {
   finalizado: 'bg-green-100 text-green-700',
   entregue: 'bg-gray-100 text-gray-700',
   cancelado: 'bg-red-100 text-red-700',
+}
+
+async function getDashboardData(empresaId: string) {
+  const supabase = await createClient()
+  const hoje = new Date()
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString()
+
+  // Pedidos do mês (não cancelados)
+  const { data: pedidosMes } = await supabase
+    .from('pedidos')
+    .select('id, valor_recebido, valor_total, frete_valor')
+    .eq('empresa_id', empresaId)
+    .neq('status', 'cancelado')
+    .gte('created_at', inicioMes)
+
+  const totalPedidosMes = (pedidosMes || []).length
+  const totalEntrou = (pedidosMes || []).reduce(
+    (s, p) => s + Number(p.valor_recebido ?? p.valor_total ?? 0), 0
+  )
+  const totalCorreio = (pedidosMes || []).reduce(
+    (s, p) => s + Number(p.frete_valor ?? 0), 0
+  )
+
+  // Custo de material dos itens vendidos no mês
+  let custoMaterial = 0
+  const pedidoIds = (pedidosMes || []).map(p => p.id)
+
+  if (pedidoIds.length > 0) {
+    const { data: itens } = await supabase
+      .from('itens_pedido')
+      .select('quantidade, produto_id')
+      .in('pedido_id', pedidoIds)
+
+    if (itens && itens.length > 0) {
+      const produtoIds = [...new Set(itens.map(i => i.produto_id).filter(Boolean))]
+      if (produtoIds.length > 0) {
+        const { data: produtos } = await supabase
+          .from('produtos')
+          .select('id, custo_total')
+          .in('id', produtoIds)
+
+        const custoPorId: Record<string, number> = {}
+        ;(produtos || []).forEach(p => { custoPorId[p.id] = Number(p.custo_total ?? 0) })
+
+        custoMaterial = itens.reduce(
+          (s, i) => s + i.quantidade * (custoPorId[i.produto_id] ?? 0), 0
+        )
+      }
+    }
+  }
+
+  const lucro = totalEntrou - custoMaterial - totalCorreio
+
+  // Pedidos ativos e recentes
+  const [{ data: pedidosAbertos }, { data: pedidosRecentes }] = await Promise.all([
+    supabase
+      .from('pedidos')
+      .select('id')
+      .eq('empresa_id', empresaId)
+      .in('status', ['aprovado', 'producao', 'finalizado']),
+    supabase
+      .from('pedidos')
+      .select('id, numero, status, valor_total, clientes(nome)')
+      .eq('empresa_id', empresaId)
+      .not('status', 'in', '(entregue,cancelado)')
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ])
+
+  return {
+    total_entrou: totalEntrou,
+    custo_material: custoMaterial,
+    total_correio: totalCorreio,
+    lucro_mes: lucro,
+    total_pedidos_mes: totalPedidosMes,
+    pedidos_andamento: (pedidosAbertos || []).length,
+    pedidos_recentes: pedidosRecentes || [],
+  }
 }
 
 export default async function DashboardPage() {
@@ -89,39 +119,8 @@ export default async function DashboardPage() {
     month: 'long',
   })
 
-  const cards = [
-    {
-      label: 'Caixa atual',
-      value: formatCurrency(dados.caixa_atual),
-      icon: DollarSign,
-      cor: 'text-green-700',
-      bg: 'bg-green-100',
-    },
-    {
-      label: 'Pedidos ativos',
-      value: String(dados.pedidos_andamento),
-      icon: ShoppingBag,
-      cor: 'text-blue-700',
-      bg: 'bg-blue-100',
-    },
-    {
-      label: 'Vendas do mês',
-      value: formatCurrency(dados.vendas_mes),
-      icon: TrendingUp,
-      cor: 'text-purple-700',
-      bg: 'bg-purple-100',
-    },
-    {
-      label: 'Lucro do mês',
-      value: formatCurrency(dados.lucro_mes),
-      icon: TrendingDown,
-      cor: 'text-emerald-700',
-      bg: 'bg-emerald-100',
-    },
-  ]
-
   return (
-    <div className="p-4 space-y-5">
+    <div className="p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between pt-4">
         <div>
@@ -135,20 +134,66 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Cards */}
+      {/* Cards principais — linha 1 */}
       <div className="grid grid-cols-2 gap-3">
-        {cards.map(({ label, value, icon: Icon, cor, bg }) => (
-          <div
-            key={label}
-            className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"
-          >
-            <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center mb-3`}>
-              <Icon size={18} className={cor} />
-            </div>
-            <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-            <p className={`text-lg font-bold ${cor}`}>{value}</p>
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center mb-3">
+            <TrendingUp size={18} className="text-green-700" />
           </div>
-        ))}
+          <p className="text-xs text-gray-500 mb-0.5">Quanto entrou</p>
+          <p className="text-lg font-bold text-green-700">{formatCurrency(dados.total_entrou)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">valor recebido no mês</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center mb-3">
+            <ShoppingBag size={18} className="text-blue-700" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">Pedidos no mês</p>
+          <p className="text-lg font-bold text-blue-700">{dados.total_pedidos_mes}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{dados.pedidos_andamento} em andamento</p>
+        </div>
+      </div>
+
+      {/* Cards — linha 2 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center mb-3">
+            <Package size={18} className="text-orange-700" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">Saiu — Material</p>
+          <p className="text-lg font-bold text-orange-700">{formatCurrency(dados.custo_material)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">custo dos produtos vendidos</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
+            <Truck size={18} className="text-purple-700" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">Saiu — Correio</p>
+          <p className="text-lg font-bold text-purple-700">{formatCurrency(dados.total_correio)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">frete total do mês</p>
+        </div>
+      </div>
+
+      {/* Lucro — destaque */}
+      <div className={`rounded-2xl p-4 border shadow-sm ${
+        dados.lucro_mes >= 0
+          ? 'bg-emerald-50 border-emerald-200'
+          : 'bg-red-50 border-red-200'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingDown size={16} className={dados.lucro_mes >= 0 ? 'text-emerald-600' : 'text-red-500'} />
+              <p className="text-sm font-semibold text-gray-700">Lucro do mês</p>
+            </div>
+            <p className="text-[11px] text-gray-500">entrou − material − correio</p>
+          </div>
+          <p className={`text-2xl font-bold ${dados.lucro_mes >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+            {formatCurrency(dados.lucro_mes)}
+          </p>
+        </div>
       </div>
 
       {/* Pedidos em aberto */}
@@ -161,9 +206,7 @@ export default async function DashboardPage() {
         </div>
 
         {dados.pedidos_recentes.length === 0 ? (
-          <p className="text-gray-400 text-sm text-center py-4">
-            Nenhum pedido em aberto
-          </p>
+          <p className="text-gray-400 text-sm text-center py-4">Nenhum pedido em aberto</p>
         ) : (
           <div className="space-y-3">
             {dados.pedidos_recentes.map((pedido: any) => (
@@ -173,18 +216,10 @@ export default async function DashboardPage() {
                 className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
               >
                 <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {pedido.clientes?.nome}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    #{pedido.numero} · {formatCurrency(pedido.valor_total)}
-                  </p>
+                  <p className="text-sm font-medium text-gray-900">{pedido.clientes?.nome}</p>
+                  <p className="text-xs text-gray-500">#{pedido.numero} · {formatCurrency(pedido.valor_total)}</p>
                 </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    STATUS_COLORS[pedido.status]
-                  }`}
-                >
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[pedido.status]}`}>
                   {STATUS_LABELS[pedido.status]}
                 </span>
               </Link>
@@ -200,6 +235,8 @@ export default async function DashboardPage() {
       >
         + Novo Pedido
       </Link>
+
+      <div className="pb-8" />
     </div>
   )
 }
