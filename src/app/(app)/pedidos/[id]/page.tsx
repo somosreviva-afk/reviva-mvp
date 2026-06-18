@@ -136,13 +136,28 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const link = pedido.link_pasta_drive
-    const mensagem =
-      `Olá, ${nome}! 💖\n\n` +
-      `Recebemos seu pedido e sua pasta exclusiva já foi criada.\n\n` +
-      `Para manter a qualidade original das fotos, envie suas imagens diretamente pelo link abaixo:\n\n` +
-      `${link}\n\n` +
-      `Assim que recebermos as fotos iniciaremos a produção dos seus ímãs personalizados. ✨\n\n` +
-      `Qualquer dúvida estou à disposição. 💕`
+    const coracao = '\u{1F496}'
+    const estrela = '✨'
+    const camera = '\u{1F4F8}'
+    const ok = '✅'
+    const mensagem = [
+      `Olá, ${nome}! ${coracao}`,
+      ``,
+      `Recebemos seu pedido e sua pasta exclusiva já foi criada.`,
+      ``,
+      `Para manter a qualidade original das fotos, envie diretamente pelo link abaixo:`,
+      ``,
+      link,
+      ``,
+      `${camera} *Como enviar pelo celular:*`,
+      `1. Abra o link acima`,
+      `2. Toque no botão "+" ou "Fazer upload"`,
+      `3. Escolha as fotos da sua galeria`,
+      `4. Aguarde o upload concluir`,
+      ``,
+      `Assim que recebermos as fotos iniciamos a produção! ${estrela}`,
+      `Qualquer dúvida estou à disposição. ${ok}`,
+    ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
