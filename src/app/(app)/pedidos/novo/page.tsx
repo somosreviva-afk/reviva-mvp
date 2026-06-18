@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Plus, Trash2, Search } from 'lucide-react'
 import Link from 'next/link'
+import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
 
 interface ItemPedido {
   produto_id: string
@@ -12,6 +13,7 @@ interface ItemPedido {
   preco_unitario: number
   preco_liquido: number
   quantidade: number
+  qtd_imas: number
 }
 
 export default function NovoPedidoPage() {
@@ -19,6 +21,7 @@ export default function NovoPedidoPage() {
   const [loading, setLoading] = useState(false)
   const [clientes, setClientes] = useState<any[]>([])
   const [produtos, setProdutos] = useState<any[]>([])
+  const [configMateriais, setConfigMateriais] = useState<ConfigMateriais>(CONFIG_PADRAO)
   const [buscaCliente, setBuscaCliente] = useState('')
   const [buscaProduto, setBuscaProduto] = useState('')
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null)
@@ -33,6 +36,8 @@ export default function NovoPedidoPage() {
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link_pagamento'>('pix')
+  // qtd_imas manual para encomenda personalizada (produto sem qtd_imas definido)
+  const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const descontoValor = parseFloat(desconto) || 0
@@ -44,6 +49,15 @@ export default function NovoPedidoPage() {
     ? total
     : Math.max(0, subtotalLiquido - descontoValor + freteVal)
 
+  // Total de ímãs do pedido
+  const qtdImasTotal = itens.reduce((s, i) => {
+    const qtdItem = i.qtd_imas > 0 ? i.qtd_imas : (parseInt(qtdImasManual[i.produto_id] || '0') || 0)
+    return s + qtdItem * i.quantidade
+  }, 0)
+
+  const custos = calcularCustosPedido(qtdImasTotal, configMateriais)
+  const lucroReal = valorRecebido - custos.custo_total_pedido
+
   useEffect(() => {
     async function carregar() {
       const supabase = createClient()
@@ -51,12 +65,25 @@ export default function NovoPedidoPage() {
       const { data: usuario } = await supabase
         .from('usuarios').select('empresa_id').eq('id', user!.id).single()
 
-      const [{ data: c }, { data: p }] = await Promise.all([
+      const [{ data: c }, { data: p }, { data: cfg }] = await Promise.all([
         supabase.from('clientes').select('id, nome, whatsapp').eq('empresa_id', usuario!.empresa_id).order('nome'),
-        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, estoque').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
+        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, qtd_imas, estoque').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
+        supabase.from('configuracoes_materiais').select('*').eq('empresa_id', usuario!.empresa_id).single(),
       ])
       setClientes(c || [])
       setProdutos(p || [])
+      if (cfg) {
+        setConfigMateriais({
+          ima_custo: Number(cfg.ima_custo),
+          caixa_custo: Number(cfg.caixa_custo),
+          saquinho_custo: Number(cfg.saquinho_custo),
+          envelope_custo: Number(cfg.envelope_custo),
+          papel_seda_custo: Number(cfg.papel_seda_custo),
+          cartao_custo: Number(cfg.cartao_custo),
+          impressao_valor_folha: Number(cfg.impressao_valor_folha),
+          impressao_fotos_por_folha: Number(cfg.impressao_fotos_por_folha),
+        })
+      }
     }
     carregar()
   }, [])
@@ -77,7 +104,8 @@ export default function NovoPedidoPage() {
         nome: p.nome,
         preco_unitario: p.preco_venda,
         preco_liquido: p.preco_liquido || p.preco_venda,
-        quantidade: 1
+        quantidade: 1,
+        qtd_imas: p.qtd_imas || 0,
       }])
     }
     setMostrarProdutos(false)
@@ -121,6 +149,17 @@ export default function NovoPedidoPage() {
       valor_total: total,
       forma_pagamento: formaPagamento,
       valor_recebido: valorRecebido,
+      // Custos
+      qtd_imas: custos.qtd_imas,
+      custo_imas: custos.custo_imas,
+      custo_impressao: custos.custo_impressao,
+      custo_saquinhos: custos.custo_saquinhos,
+      custo_caixa: custos.custo_caixa,
+      custo_envelope: custos.custo_envelope,
+      custo_papel_seda: custos.custo_papel_seda,
+      custo_cartao: custos.custo_cartao,
+      custo_total_pedido: custos.custo_total_pedido,
+      lucro_real: lucroReal,
     }).select().single()
 
     if (error || !pedido) {
@@ -150,6 +189,8 @@ export default function NovoPedidoPage() {
   )
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const temImasManual = itens.some(i => i.qtd_imas === 0)
 
   return (
     <div className="p-4">
@@ -352,6 +393,20 @@ export default function NovoPedidoPage() {
                     {fmt(item.preco_unitario * item.quantidade)}
                   </span>
                 </div>
+                {/* Campo manual de qtd_imas para encomendas personalizadas */}
+                {item.qtd_imas === 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-orange-600">📸 Qtd ímãs (personalizado):</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={qtdImasManual[item.produto_id] || ''}
+                      onChange={e => setQtdImasManual(prev => ({ ...prev, [item.produto_id]: e.target.value }))}
+                      placeholder="0"
+                      className="w-16 border border-orange-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -433,38 +488,87 @@ export default function NovoPedidoPage() {
         </div>
       </div>
 
-      {/* Total */}
+      {/* Total + Custos + Lucro */}
       {itens.length > 0 && (
-        <div className="bg-green-600 rounded-2xl p-4 mb-4 text-white">
-          <div className="flex justify-between text-sm text-green-200 mb-1">
-            <span>Subtotal</span>
-            <span>{fmt(subtotal)}</span>
-          </div>
-          {descontoValor > 0 && (
+        <>
+          <div className="bg-green-600 rounded-2xl p-4 mb-3 text-white">
             <div className="flex justify-between text-sm text-green-200 mb-1">
-              <span>Desconto</span>
-              <span>- {fmt(descontoValor)}</span>
+              <span>Subtotal</span>
+              <span>{fmt(subtotal)}</span>
+            </div>
+            {descontoValor > 0 && (
+              <div className="flex justify-between text-sm text-green-200 mb-1">
+                <span>Desconto</span>
+                <span>- {fmt(descontoValor)}</span>
+              </div>
+            )}
+            {freteVal > 0 && (
+              <div className="flex justify-between text-sm text-green-200 mb-1">
+                <span>Frete</span>
+                <span>+ {fmt(freteVal)}</span>
+              </div>
+            )}
+            <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
+              <span className="font-medium">Valor da Venda</span>
+              <span className="text-2xl font-bold">{fmt(total)}</span>
+            </div>
+            <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
+              formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'
+            }`}>
+              <span className="text-sm font-medium">
+                {formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}
+              </span>
+              <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
+            </div>
+          </div>
+
+          {/* Custos de Material */}
+          {qtdImasTotal > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                📦 Custo de Material ({qtdImasTotal} ímãs)
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  { label: 'Ímãs', val: custos.custo_imas },
+                  { label: 'Impressão', val: custos.custo_impressao },
+                  { label: 'Saquinhos', val: custos.custo_saquinhos },
+                  { label: 'Caixa', val: custos.custo_caixa },
+                  { label: 'Envelope', val: custos.custo_envelope },
+                  { label: 'Papel Seda', val: custos.custo_papel_seda },
+                  { label: 'Cartão Reviva', val: custos.custo_cartao },
+                ].map(({ label, val }) => val > 0 && (
+                  <div key={label} className="flex justify-between text-sm">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="text-gray-700">{fmt(val)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-sm">
+                  <span className="text-gray-700">Total Materiais</span>
+                  <span className="text-orange-600">{fmt(custos.custo_total_pedido)}</span>
+                </div>
+              </div>
+              <div className={`mt-3 rounded-xl px-3 py-2.5 flex justify-between items-center ${
+                lucroReal >= 0 ? 'bg-green-50' : 'bg-red-50'
+              }`}>
+                <span className={`text-sm font-semibold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  💖 Lucro Real
+                </span>
+                <span className={`text-lg font-bold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  {fmt(lucroReal)}
+                </span>
+              </div>
             </div>
           )}
-          {freteVal > 0 && (
-            <div className="flex justify-between text-sm text-green-200 mb-1">
-              <span>Frete</span>
-              <span>+ {fmt(freteVal)}</span>
+
+          {temImasManual && qtdImasTotal === 0 && (
+            <div className="bg-orange-50 rounded-xl p-3 mb-3 border border-orange-200">
+              <p className="text-xs text-orange-700">
+                ⚠️ Informe a quantidade de ímãs nos produtos personalizados para calcular o custo.
+              </p>
             </div>
           )}
-          <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
-            <span className="font-medium">Valor da Venda</span>
-            <span className="text-2xl font-bold">{fmt(total)}</span>
-          </div>
-          <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
-            formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'
-          }`}>
-            <span className="text-sm font-medium">
-              {formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}
-            </span>
-            <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
-          </div>
-        </div>
+        </>
       )}
 
       <div className="pb-24">

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, Plus, Trash2, Search } from 'lucide-react'
 import Link from 'next/link'
+import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
 
 interface ItemPedido {
   produto_id: string
@@ -12,6 +13,7 @@ interface ItemPedido {
   preco_unitario: number
   preco_liquido: number
   quantidade: number
+  qtd_imas: number
 }
 
 export default function EditarPedidoPage() {
@@ -23,6 +25,7 @@ export default function EditarPedidoPage() {
   const [salvando, setSalvando] = useState(false)
   const [clientes, setClientes] = useState<any[]>([])
   const [produtosCatalogo, setProdutosCatalogo] = useState<any[]>([])
+  const [configMateriais, setConfigMateriais] = useState<ConfigMateriais>(CONFIG_PADRAO)
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null)
   const [buscaCliente, setBuscaCliente] = useState('')
   const [buscaProduto, setBuscaProduto] = useState('')
@@ -37,6 +40,7 @@ export default function EditarPedidoPage() {
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link_pagamento'>('pix')
+  const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const descontoValor = parseFloat(desconto) || 0
@@ -47,6 +51,14 @@ export default function EditarPedidoPage() {
     ? total
     : Math.max(0, subtotalLiquido - descontoValor + freteVal)
 
+  const qtdImasTotal = itens.reduce((s, i) => {
+    const qtdItem = i.qtd_imas > 0 ? i.qtd_imas : (parseInt(qtdImasManual[i.produto_id] || '0') || 0)
+    return s + qtdItem * i.quantidade
+  }, 0)
+
+  const custos = calcularCustosPedido(qtdImasTotal, configMateriais)
+  const lucroReal = valorRecebido - custos.custo_total_pedido
+
   useEffect(() => {
     async function carregar() {
       const supabase = createClient()
@@ -54,11 +66,12 @@ export default function EditarPedidoPage() {
       const { data: usuario } = await supabase
         .from('usuarios').select('empresa_id').eq('id', user!.id).single()
 
-      const [{ data: pedido }, { data: itensPedido }, { data: c }, { data: p }] = await Promise.all([
+      const [{ data: pedido }, { data: itensPedido }, { data: c }, { data: p }, { data: cfg }] = await Promise.all([
         supabase.from('pedidos').select('*, clientes(*)').eq('id', id).single(),
         supabase.from('itens_pedido').select('*').eq('pedido_id', id).order('created_at'),
         supabase.from('clientes').select('id, nome, whatsapp').eq('empresa_id', usuario!.empresa_id).order('nome'),
-        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
+        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, qtd_imas').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
+        supabase.from('configuracoes_materiais').select('*').eq('empresa_id', usuario!.empresa_id).single(),
       ])
 
       if (pedido) {
@@ -74,15 +87,29 @@ export default function EditarPedidoPage() {
       }
 
       if (itensPedido && p) {
-        const custoPorId: Record<string, number> = {}
-        ;(p || []).forEach((prod: any) => { custoPorId[prod.id] = prod.preco_liquido || prod.preco_venda })
+        const prodMap: Record<string, any> = {}
+        ;(p || []).forEach((prod: any) => { prodMap[prod.id] = prod })
         setItens(itensPedido.map((i: any) => ({
           produto_id: i.produto_id,
           nome: i.nome_produto,
           preco_unitario: Number(i.preco_unitario),
-          preco_liquido: custoPorId[i.produto_id] || Number(i.preco_unitario),
+          preco_liquido: prodMap[i.produto_id]?.preco_liquido || Number(i.preco_unitario),
           quantidade: i.quantidade,
+          qtd_imas: prodMap[i.produto_id]?.qtd_imas || 0,
         })))
+      }
+
+      if (cfg) {
+        setConfigMateriais({
+          ima_custo: Number(cfg.ima_custo),
+          caixa_custo: Number(cfg.caixa_custo),
+          saquinho_custo: Number(cfg.saquinho_custo),
+          envelope_custo: Number(cfg.envelope_custo),
+          papel_seda_custo: Number(cfg.papel_seda_custo),
+          cartao_custo: Number(cfg.cartao_custo),
+          impressao_valor_folha: Number(cfg.impressao_valor_folha),
+          impressao_fotos_por_folha: Number(cfg.impressao_fotos_por_folha),
+        })
       }
 
       setClientes(c || [])
@@ -103,6 +130,7 @@ export default function EditarPedidoPage() {
         preco_unitario: p.preco_venda,
         preco_liquido: p.preco_liquido || p.preco_venda,
         quantidade: 1,
+        qtd_imas: p.qtd_imas || 0,
       }])
     }
     setMostrarProdutos(false)
@@ -142,6 +170,16 @@ export default function EditarPedidoPage() {
       valor_total: total,
       forma_pagamento: formaPagamento,
       valor_recebido: valorRecebido,
+      qtd_imas: custos.qtd_imas,
+      custo_imas: custos.custo_imas,
+      custo_impressao: custos.custo_impressao,
+      custo_saquinhos: custos.custo_saquinhos,
+      custo_caixa: custos.custo_caixa,
+      custo_envelope: custos.custo_envelope,
+      custo_papel_seda: custos.custo_papel_seda,
+      custo_cartao: custos.custo_cartao,
+      custo_total_pedido: custos.custo_total_pedido,
+      lucro_real: lucroReal,
     }).eq('id', id)
 
     await supabase.from('itens_pedido').delete().eq('pedido_id', id)
@@ -189,13 +227,8 @@ export default function EditarPedidoPage() {
             { value: 'finalizado', label: 'Finalizado', color: 'bg-green-500' },
             { value: 'entregue', label: 'Entregue', color: 'bg-gray-500' },
           ].map(s => (
-            <button
-              key={s.value}
-              onClick={() => setStatus(s.value)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                status === s.value ? `${s.color} text-white` : 'bg-gray-100 text-gray-600'
-              }`}
-            >
+            <button key={s.value} onClick={() => setStatus(s.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${status === s.value ? `${s.color} text-white` : 'bg-gray-100 text-gray-600'}`}>
               {s.label}
             </button>
           ))}
@@ -206,20 +239,12 @@ export default function EditarPedidoPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento</label>
         <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setFormaPagamento('pix')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'pix' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'
-            }`}
-          >
+          <button onClick={() => setFormaPagamento('pix')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'pix' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}>
             💚 Pix
           </button>
-          <button
-            onClick={() => setFormaPagamento('link_pagamento')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'link_pagamento' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500'
-            }`}
-          >
+          <button onClick={() => setFormaPagamento('link_pagamento')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'link_pagamento' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500'}`}>
             🔗 Link de Pagamento
           </button>
         </div>
@@ -242,14 +267,11 @@ export default function EditarPedidoPage() {
           <div>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={buscaCliente}
+              <input type="text" value={buscaCliente}
                 onChange={e => { setBuscaCliente(e.target.value); setMostrarClientes(true) }}
                 onFocus={() => setMostrarClientes(true)}
                 placeholder="Buscar cliente..."
-                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             {mostrarClientes && clientesFiltrados.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
@@ -319,6 +341,16 @@ export default function EditarPedidoPage() {
                     className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500" />
                   <span className="text-sm font-semibold text-gray-900 ml-auto">{fmt(item.preco_unitario * item.quantidade)}</span>
                 </div>
+                {item.qtd_imas === 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs text-orange-600">📸 Qtd ímãs (personalizado):</span>
+                    <input type="number" min="0"
+                      value={qtdImasManual[item.produto_id] || ''}
+                      onChange={e => setQtdImasManual(prev => ({ ...prev, [item.produto_id]: e.target.value }))}
+                      placeholder="0"
+                      className="w-16 border border-orange-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-orange-400" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -371,31 +403,65 @@ export default function EditarPedidoPage() {
         </div>
       </div>
 
-      {/* Total */}
+      {/* Total + Custos */}
       {itens.length > 0 && (
-        <div className="bg-green-600 rounded-2xl p-4 mb-4 text-white">
-          <div className="flex justify-between text-sm text-green-200 mb-1">
-            <span>Subtotal</span><span>{fmt(subtotal)}</span>
-          </div>
-          {descontoValor > 0 && (
+        <>
+          <div className="bg-green-600 rounded-2xl p-4 mb-3 text-white">
             <div className="flex justify-between text-sm text-green-200 mb-1">
-              <span>Desconto</span><span>- {fmt(descontoValor)}</span>
+              <span>Subtotal</span><span>{fmt(subtotal)}</span>
+            </div>
+            {descontoValor > 0 && (
+              <div className="flex justify-between text-sm text-green-200 mb-1">
+                <span>Desconto</span><span>- {fmt(descontoValor)}</span>
+              </div>
+            )}
+            {freteVal > 0 && (
+              <div className="flex justify-between text-sm text-green-200 mb-1">
+                <span>Frete</span><span>+ {fmt(freteVal)}</span>
+              </div>
+            )}
+            <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
+              <span className="font-medium">Valor da Venda</span>
+              <span className="text-2xl font-bold">{fmt(total)}</span>
+            </div>
+            <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'}`}>
+              <span className="text-sm font-medium">{formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}</span>
+              <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
+            </div>
+          </div>
+
+          {qtdImasTotal > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                📦 Custo de Material ({qtdImasTotal} ímãs)
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  { label: 'Ímãs', val: custos.custo_imas },
+                  { label: 'Impressão', val: custos.custo_impressao },
+                  { label: 'Saquinhos', val: custos.custo_saquinhos },
+                  { label: 'Caixa', val: custos.custo_caixa },
+                  { label: 'Envelope', val: custos.custo_envelope },
+                  { label: 'Papel Seda', val: custos.custo_papel_seda },
+                  { label: 'Cartão Reviva', val: custos.custo_cartao },
+                ].map(({ label, val }) => val > 0 && (
+                  <div key={label} className="flex justify-between text-sm">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="text-gray-700">{fmt(val)}</span>
+                  </div>
+                ))}
+                <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-sm">
+                  <span className="text-gray-700">Total Materiais</span>
+                  <span className="text-orange-600">{fmt(custos.custo_total_pedido)}</span>
+                </div>
+              </div>
+              <div className={`mt-3 rounded-xl px-3 py-2.5 flex justify-between items-center ${lucroReal >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                <span className={`text-sm font-semibold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>💖 Lucro Real</span>
+                <span className={`text-lg font-bold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmt(lucroReal)}</span>
+              </div>
             </div>
           )}
-          {freteVal > 0 && (
-            <div className="flex justify-between text-sm text-green-200 mb-1">
-              <span>Frete</span><span>+ {fmt(freteVal)}</span>
-            </div>
-          )}
-          <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
-            <span className="font-medium">Valor da Venda</span>
-            <span className="text-2xl font-bold">{fmt(total)}</span>
-          </div>
-          <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'}`}>
-            <span className="text-sm font-medium">{formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}</span>
-            <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
-          </div>
-        </div>
+        </>
       )}
 
       <div className="pb-24">

@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
+import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -14,25 +15,35 @@ export default function PedidoDetailPage() {
   const [pedido, setPedido] = useState<any>(null)
   const [itens, setItens] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [configMateriais, setConfigMateriais] = useState<ConfigMateriais>(CONFIG_PADRAO)
   const [atualizando, setAtualizando] = useState(false)
   const [rastreio, setRastreio] = useState('')
   const [salvandoRastreio, setSalvandoRastreio] = useState(false)
 
   async function carregar() {
     const supabase = createClient()
-    const { data: p } = await supabase
-      .from('pedidos')
-      .select('*, clientes(*)')
-      .eq('id', id)
-      .single()
-    const { data: i } = await supabase
-      .from('itens_pedido')
-      .select('*')
-      .eq('pedido_id', id)
-      .order('created_at')
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', user!.id).single()
+    const [{ data: p }, { data: i }, { data: cfg }] = await Promise.all([
+      supabase.from('pedidos').select('*, clientes(*)').eq('id', id).single(),
+      supabase.from('itens_pedido').select('*').eq('pedido_id', id).order('created_at'),
+      supabase.from('configuracoes_materiais').select('*').eq('empresa_id', usuario!.empresa_id).single(),
+    ])
     setPedido(p)
     setItens(i || [])
     setRastreio(p?.codigo_rastreio || '')
+    if (cfg) {
+      setConfigMateriais({
+        ima_custo: Number(cfg.ima_custo),
+        caixa_custo: Number(cfg.caixa_custo),
+        saquinho_custo: Number(cfg.saquinho_custo),
+        envelope_custo: Number(cfg.envelope_custo),
+        papel_seda_custo: Number(cfg.papel_seda_custo),
+        cartao_custo: Number(cfg.cartao_custo),
+        impressao_valor_folha: Number(cfg.impressao_valor_folha),
+        impressao_fotos_por_folha: Number(cfg.impressao_fotos_por_folha),
+      })
+    }
     setLoading(false)
   }
 
@@ -90,6 +101,20 @@ export default function PedidoDetailPage() {
   )
 
   const proximosStatus = STATUS_ORDER[pedido.status] || []
+
+  // Custos salvos no pedido (ou recalcula se ainda não existem)
+  const qtdImasPedido = pedido.qtd_imas || 0
+  const custosSalvos = qtdImasPedido > 0 ? {
+    custo_imas: Number(pedido.custo_imas || 0),
+    custo_impressao: Number(pedido.custo_impressao || 0),
+    custo_saquinhos: Number(pedido.custo_saquinhos || 0),
+    custo_caixa: Number(pedido.custo_caixa || 0),
+    custo_envelope: Number(pedido.custo_envelope || 0),
+    custo_papel_seda: Number(pedido.custo_papel_seda || 0),
+    custo_cartao: Number(pedido.custo_cartao || 0),
+    custo_total_pedido: Number(pedido.custo_total_pedido || 0),
+  } : null
+  const lucroReal = Number(pedido.lucro_real ?? (pedido.valor_recebido ?? pedido.valor_total))
 
   return (
     <div className="p-4">
@@ -242,6 +267,43 @@ export default function PedidoDetailPage() {
                 {salvandoRastreio ? '...' : 'Salvar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custos e Lucro */}
+      {custosSalvos && custosSalvos.custo_total_pedido > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            📦 Custo de Material ({qtdImasPedido} ímãs)
+          </p>
+          <div className="space-y-1.5">
+            {[
+              { label: 'Ímãs', val: custosSalvos.custo_imas },
+              { label: 'Impressão', val: custosSalvos.custo_impressao },
+              { label: 'Saquinhos', val: custosSalvos.custo_saquinhos },
+              { label: 'Caixa', val: custosSalvos.custo_caixa },
+              { label: 'Envelope', val: custosSalvos.custo_envelope },
+              { label: 'Papel Seda', val: custosSalvos.custo_papel_seda },
+              { label: 'Cartão Reviva', val: custosSalvos.custo_cartao },
+            ].map(({ label, val }) => val > 0 && (
+              <div key={label} className="flex justify-between text-sm">
+                <span className="text-gray-500">{label}</span>
+                <span className="text-gray-700">{formatCurrency(val)}</span>
+              </div>
+            ))}
+            <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-sm">
+              <span className="text-gray-700">Total Materiais</span>
+              <span className="text-orange-600">{formatCurrency(custosSalvos.custo_total_pedido)}</span>
+            </div>
+          </div>
+          <div className={`mt-3 rounded-xl px-3 py-2.5 flex justify-between items-center ${lucroReal >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+            <span className={`text-sm font-semibold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              💖 Lucro Real
+            </span>
+            <span className={`text-lg font-bold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              {formatCurrency(lucroReal)}
+            </span>
           </div>
         </div>
       )}

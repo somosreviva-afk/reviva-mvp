@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils/formatters'
-import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera } from 'lucide-react'
 import Link from 'next/link'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -26,10 +26,10 @@ async function getDashboardData(empresaId: string) {
   const hoje = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString()
 
-  // Pedidos do mês (não cancelados)
+  // Pedidos do mês (não cancelados) — inclui colunas de custo
   const { data: pedidosMes } = await supabase
     .from('pedidos')
-    .select('id, valor_recebido, valor_total, frete_valor')
+    .select('id, valor_recebido, valor_total, frete_valor, custo_total_pedido, lucro_real, qtd_imas')
     .eq('empresa_id', empresaId)
     .neq('status', 'cancelado')
     .gte('created_at', inicioMes)
@@ -42,11 +42,25 @@ async function getDashboardData(empresaId: string) {
     (s, p) => s + Number(p.frete_valor ?? 0), 0
   )
 
-  // Custo de material dos itens vendidos no mês
-  let custoMaterial = 0
-  const pedidoIds = (pedidosMes || []).map(p => p.id)
+  // Custo de material — usa coluna salva (custo_total_pedido) se disponível
+  const custoMaterialSalvo = (pedidosMes || []).reduce(
+    (s, p) => s + Number(p.custo_total_pedido ?? 0), 0
+  )
 
-  if (pedidoIds.length > 0) {
+  // Lucro real salvo
+  const lucroRealSalvo = (pedidosMes || []).reduce(
+    (s, p) => s + Number(p.lucro_real ?? 0), 0
+  )
+
+  // Ímãs vendidos
+  const totalImas = (pedidosMes || []).reduce(
+    (s, p) => s + Number(p.qtd_imas ?? 0), 0
+  )
+
+  // Se não tiver custo salvo, calcula via itens (legado)
+  let custoMaterial = custoMaterialSalvo
+  if (custoMaterial === 0 && (pedidosMes || []).length > 0) {
+    const pedidoIds = (pedidosMes || []).map(p => p.id)
     const { data: itens } = await supabase
       .from('itens_pedido')
       .select('quantidade, produto_id')
@@ -59,10 +73,8 @@ async function getDashboardData(empresaId: string) {
           .from('produtos')
           .select('id, custo_total')
           .in('id', produtoIds)
-
         const custoPorId: Record<string, number> = {}
         ;(produtos || []).forEach(p => { custoPorId[p.id] = Number(p.custo_total ?? 0) })
-
         custoMaterial = itens.reduce(
           (s, i) => s + i.quantidade * (custoPorId[i.produto_id] ?? 0), 0
         )
@@ -70,7 +82,8 @@ async function getDashboardData(empresaId: string) {
     }
   }
 
-  const lucro = totalEntrou - custoMaterial - totalCorreio
+  const lucro = lucroRealSalvo > 0 ? lucroRealSalvo : totalEntrou - custoMaterial - totalCorreio
+  const margemPct = totalEntrou > 0 ? (lucro / totalEntrou) * 100 : 0
 
   // Pedidos ativos e recentes
   const [{ data: pedidosAbertos }, { data: pedidosRecentes }] = await Promise.all([
@@ -93,6 +106,9 @@ async function getDashboardData(empresaId: string) {
     custo_material: custoMaterial,
     total_correio: totalCorreio,
     lucro_mes: lucro,
+    lucro_real_salvo: lucroRealSalvo,
+    margem_pct: margemPct,
+    total_imas: totalImas,
     total_pedidos_mes: totalPedidosMes,
     pedidos_andamento: (pedidosAbertos || []).length,
     pedidos_recentes: pedidosRecentes || [],
@@ -193,6 +209,51 @@ export default async function DashboardPage() {
           <p className={`text-2xl font-bold ${dados.lucro_mes >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
             {formatCurrency(dados.lucro_mes)}
           </p>
+        </div>
+      </div>
+
+      {/* Novos indicadores de lucro real e ímãs */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-pink-100 flex items-center justify-center mb-3">
+            <Heart size={18} className="text-pink-600" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">💖 Lucro Real</p>
+          <p className={`text-lg font-bold ${dados.lucro_real_salvo >= 0 ? 'text-pink-700' : 'text-red-600'}`}>
+            {formatCurrency(dados.lucro_real_salvo)}
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">após custo de materiais</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center mb-3">
+            <BarChart2 size={18} className="text-indigo-600" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">📈 Margem de Lucro</p>
+          <p className={`text-lg font-bold ${dados.margem_pct >= 0 ? 'text-indigo-700' : 'text-red-600'}`}>
+            {dados.margem_pct.toFixed(1)}%
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">sobre valor recebido</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center mb-3">
+            <Camera size={18} className="text-teal-600" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">📸 Ímãs Vendidos</p>
+          <p className="text-lg font-bold text-teal-700">{dados.total_imas}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">unidades este mês</p>
+        </div>
+
+        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center mb-3">
+            <TrendingUp size={18} className="text-green-600" />
+          </div>
+          <p className="text-xs text-gray-500 mb-0.5">💳 Val. Recebido</p>
+          <p className="text-lg font-bold text-green-700">{formatCurrency(dados.total_entrou)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">pix + link no mês</p>
         </div>
       </div>
 
