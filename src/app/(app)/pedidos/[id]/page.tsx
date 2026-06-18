@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, MessageCircle, ChevronRight, Truck } from 'lucide-react'
+import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 
@@ -59,6 +59,14 @@ export default function PedidoDetailPage() {
     await mudarStatus('cancelado')
   }
 
+  async function excluir() {
+    if (!confirm('Excluir este pedido permanentemente? Esta ação não pode ser desfeita.')) return
+    const supabase = createClient()
+    await supabase.from('itens_pedido').delete().eq('pedido_id', id)
+    await supabase.from('pedidos').delete().eq('id', id)
+    router.push('/pedidos')
+  }
+
   function abrirWhatsApp() {
     if (!pedido?.clientes?.whatsapp) return
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
@@ -89,12 +97,18 @@ export default function PedidoDetailPage() {
         <Link href="/pedidos" className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center">
           <ArrowLeft size={18} className="text-gray-600" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900">Pedido #{pedido.numero}</h1>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[pedido.status]}`}>
             {STATUS_LABELS[pedido.status]}
           </span>
         </div>
+        <Link
+          href={`/pedidos/${id}/editar`}
+          className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center"
+        >
+          <Pencil size={16} className="text-blue-600" />
+        </Link>
       </div>
 
       {/* Cliente */}
@@ -272,17 +286,24 @@ export default function PedidoDetailPage() {
         </div>
       )}
 
-      {/* Cancelar */}
-      {pedido.status !== 'cancelado' && pedido.status !== 'entregue' && (
-        <div className="pb-24">
+      {/* Cancelar / Excluir */}
+      <div className="pb-24 space-y-2">
+        {pedido.status !== 'cancelado' && pedido.status !== 'entregue' && (
           <button
             onClick={cancelar}
             className="w-full py-3 rounded-xl border border-red-200 text-red-500 text-sm font-medium"
           >
             Cancelar pedido
           </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={excluir}
+          className="w-full py-3 rounded-xl border border-red-400 bg-red-50 text-red-600 text-sm font-semibold flex items-center justify-center gap-2"
+        >
+          <Trash2 size={15} />
+          Excluir pedido
+        </button>
+      </div>
     </div>
   )
 }
