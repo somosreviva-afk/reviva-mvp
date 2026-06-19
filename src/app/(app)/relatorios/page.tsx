@@ -96,12 +96,15 @@ export default function RelatoriosPage() {
     const totalImas = pedidos.reduce((s, p) => s + Number(p.qtd_imas || 0), 0)
     const valorMedio = faturamentoBruto / pedidos.length
 
-    // Pix vs Link
+    // Por forma de pagamento
     const totalPix = pedidos
       .filter(p => p.forma_pagamento === 'pix')
       .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
     const totalLink = pedidos
-      .filter(p => p.forma_pagamento !== 'pix')
+      .filter(p => p.forma_pagamento === 'link' || p.forma_pagamento === 'link_pagamento')
+      .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
+    const totalCartao = pedidos
+      .filter(p => p.forma_pagamento === 'cartao')
       .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
 
     const kitsOrdenados = Object.entries(porProduto).sort((a, b) => b[1].qtd - a[1].qtd)
@@ -119,6 +122,7 @@ export default function RelatoriosPage() {
       lucroReal,
       totalPix,
       totalLink,
+      totalCartao,
       kitMaisVendido: kitMaisVendido ? { nome: kitMaisVendido[0], qtd: kitMaisVendido[1].qtd } : null,
       kitMaisLucrativo: kitMaisLucrativo ? { nome: kitMaisLucrativo[0], lucro: kitMaisLucrativo[1].lucro } : null,
       porProduto: Object.entries(porProduto).sort((a, b) => b[1].faturamento - a[1].faturamento),
@@ -188,15 +192,19 @@ export default function RelatoriosPage() {
           </div>
 
           {/* Entradas por forma */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">💳 Entradas</p>
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-              <p className="text-xs text-gray-500 mb-1">💚 Pix recebido</p>
-              <p className="text-base font-bold text-green-700">{formatCurrency(dados.totalPix)}</p>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">💳 Por Forma de Pagamento</p>
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+              <p className="text-[10px] text-gray-500 mb-1">Pix</p>
+              <p className="text-sm font-bold text-green-700">{formatCurrency(dados.totalPix)}</p>
             </div>
-            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-              <p className="text-xs text-gray-500 mb-1">🔗 Link recebido</p>
-              <p className="text-base font-bold text-purple-700">{formatCurrency(dados.totalLink)}</p>
+            <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+              <p className="text-[10px] text-gray-500 mb-1">Link</p>
+              <p className="text-sm font-bold text-purple-700">{formatCurrency(dados.totalLink)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+              <p className="text-[10px] text-gray-500 mb-1">Cartao</p>
+              <p className="text-sm font-bold text-blue-700">{formatCurrency(dados.totalCartao)}</p>
             </div>
           </div>
 

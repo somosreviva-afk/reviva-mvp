@@ -36,7 +36,7 @@ export default function NovoPedidoPage() {
   const [freteValor, setFreteValor] = useState('')
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
-  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link_pagamento'>('pix')
+  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
   // qtd_imas manual para encomenda personalizada (produto sem qtd_imas definido)
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
@@ -45,10 +45,8 @@ export default function NovoPedidoPage() {
   const freteVal = parseFloat(freteValor) || 0
   const total = Math.max(0, subtotal - descontoValor + freteVal)
 
-  const subtotalLiquido = itens.reduce((s, i) => s + (i.preco_liquido || i.preco_unitario) * i.quantidade, 0)
-  const valorRecebido = formaPagamento === 'pix'
-    ? total
-    : Math.max(0, subtotalLiquido - descontoValor + freteVal)
+  // Taxas repassadas ao cliente — valor recebido sempre igual ao total
+  const valorRecebido = total
 
   // Total de ímãs do pedido
   const qtdImasTotal = itens.reduce((s, i) => {
@@ -265,33 +263,32 @@ export default function NovoPedidoPage() {
       {/* Forma de Pagamento */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento *</label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => setFormaPagamento('pix')}
             className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'pix'
-                ? 'border-green-500 bg-green-50 text-green-700'
-                : 'border-gray-200 bg-white text-gray-500'
+              formaPagamento === 'pix' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500'
             }`}
           >
-            💚 Pix
+            Pix
           </button>
           <button
-            onClick={() => setFormaPagamento('link_pagamento')}
+            onClick={() => setFormaPagamento('link')}
             className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'link_pagamento'
-                ? 'border-purple-500 bg-purple-50 text-purple-700'
-                : 'border-gray-200 bg-white text-gray-500'
+              formaPagamento === 'link' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-500'
             }`}
           >
-            🔗 Link de Pagamento
+            Link
+          </button>
+          <button
+            onClick={() => setFormaPagamento('cartao')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+              formaPagamento === 'cartao' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            Cartao
           </button>
         </div>
-        {formaPagamento === 'link_pagamento' && (
-          <p className="text-xs text-purple-600 mt-2 bg-purple-50 rounded-lg px-3 py-2">
-            O valor recebido será calculado pelo preço líquido de cada produto (após taxa da plataforma).
-          </p>
-        )}
       </div>
 
       {/* Cliente */}
@@ -548,12 +545,12 @@ export default function NovoPedidoPage() {
               <span className="text-2xl font-bold">{fmt(total)}</span>
             </div>
             <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
-              formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'
+              formaPagamento === 'pix' ? 'bg-green-600' : formaPagamento === 'cartao' ? 'bg-blue-600' : 'bg-purple-600'
             }`}>
-              <span className="text-sm font-medium">
-                {formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}
+              <span className="text-sm font-medium text-white">
+                {formaPagamento === 'pix' ? 'Pix' : formaPagamento === 'cartao' ? 'Cartao' : 'Link'}
               </span>
-              <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
+              <span className="text-lg font-bold text-white">{fmt(valorRecebido)}</span>
             </div>
           </div>
 

@@ -51,9 +51,12 @@ export default async function FinanceiroPage() {
     .filter(p => p.forma_pagamento === 'pix')
     .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
   const totalLink = pedidos
-    .filter(p => p.forma_pagamento !== 'pix' && p.forma_pagamento)
+    .filter(p => p.forma_pagamento === 'link' || p.forma_pagamento === 'link_pagamento')
     .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
-  const valorRecebido = totalPix + totalLink
+  const totalCartao = pedidos
+    .filter(p => p.forma_pagamento === 'cartao')
+    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
+  const valorRecebido = totalPix + totalLink + totalCartao
   const custosMaterial = pedidos.reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
   const custosCorreio = pedidos.reduce((s, p) => s + Number(p.frete_valor || 0), 0)
   const lucroReal = pedidos.reduce((s, p) => s + Number(p.lucro_real || 0), 0)
@@ -114,34 +117,43 @@ export default async function FinanceiroPage() {
 
       {/* ENTRADAS */}
       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">✅ Entradas</p>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center">
-              <CreditCard size={14} className="text-green-600" />
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
+              <CreditCard size={12} className="text-green-600" />
             </div>
-            <span className="text-xs text-gray-500">💚 Pix</span>
+            <span className="text-[10px] text-gray-500">Pix</span>
           </div>
-          <p className="text-base font-bold text-green-700">{formatCurrency(totalPix)}</p>
+          <p className="text-sm font-bold text-green-700">{formatCurrency(totalPix)}</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center">
-              <CreditCard size={14} className="text-purple-600" />
+        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center">
+              <CreditCard size={12} className="text-purple-600" />
             </div>
-            <span className="text-xs text-gray-500">🔗 Link</span>
+            <span className="text-[10px] text-gray-500">Link</span>
           </div>
-          <p className="text-base font-bold text-purple-700">{formatCurrency(totalLink)}</p>
+          <p className="text-sm font-bold text-purple-700">{formatCurrency(totalLink)}</p>
+        </div>
+        <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-2">
+            <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
+              <CreditCard size={12} className="text-blue-600" />
+            </div>
+            <span className="text-[10px] text-gray-500">Cartao</span>
+          </div>
+          <p className="text-sm font-bold text-blue-700">{formatCurrency(totalCartao)}</p>
         </div>
         {totalEntradas > 0 && (
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm col-span-2">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                <TrendingUp size={14} className="text-teal-600" />
+          <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm col-span-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <div className="w-6 h-6 bg-teal-100 rounded-lg flex items-center justify-center">
+                <TrendingUp size={12} className="text-teal-600" />
               </div>
-              <span className="text-xs text-gray-500">➕ Outras entradas</span>
+              <span className="text-[10px] text-gray-500">Outras entradas</span>
             </div>
-            <p className="text-base font-bold text-teal-700">{formatCurrency(totalEntradas)}</p>
+            <p className="text-sm font-bold text-teal-700">{formatCurrency(totalEntradas)}</p>
           </div>
         )}
       </div>

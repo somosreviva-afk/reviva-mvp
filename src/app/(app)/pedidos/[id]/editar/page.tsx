@@ -39,17 +39,15 @@ export default function EditarPedidoPage() {
   const [freteValor, setFreteValor] = useState('')
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
-  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link_pagamento'>('pix')
+  const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const descontoValor = parseFloat(desconto) || 0
   const freteVal = parseFloat(freteValor) || 0
   const total = Math.max(0, subtotal - descontoValor + freteVal)
-  const subtotalLiquido = itens.reduce((s, i) => s + (i.preco_liquido || i.preco_unitario) * i.quantidade, 0)
-  const valorRecebido = formaPagamento === 'pix'
-    ? total
-    : Math.max(0, subtotalLiquido - descontoValor + freteVal)
+  // Taxas repassadas ao cliente — valor recebido sempre igual ao total
+  const valorRecebido = total
 
   const qtdImasTotal = itens.reduce((s, i) => {
     const qtdItem = i.qtd_imas > 0 ? i.qtd_imas : (parseInt(qtdImasManual[i.produto_id] || '0') || 0)
@@ -238,14 +236,18 @@ export default function EditarPedidoPage() {
       {/* Forma de Pagamento */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento</label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button onClick={() => setFormaPagamento('pix')}
             className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'pix' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}>
-            💚 Pix
+            Pix
           </button>
-          <button onClick={() => setFormaPagamento('link_pagamento')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'link_pagamento' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500'}`}>
-            🔗 Link de Pagamento
+          <button onClick={() => setFormaPagamento('link')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'link' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-500'}`}>
+            Link
+          </button>
+          <button onClick={() => setFormaPagamento('cartao')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === 'cartao' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500'}`}>
+            Cartao
           </button>
         </div>
       </div>
@@ -424,9 +426,11 @@ export default function EditarPedidoPage() {
               <span className="font-medium">Valor da Venda</span>
               <span className="text-2xl font-bold">{fmt(total)}</span>
             </div>
-            <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${formaPagamento === 'pix' ? 'bg-green-500' : 'bg-purple-600'}`}>
-              <span className="text-sm font-medium">{formaPagamento === 'pix' ? '💚 Valor Recebido (Pix)' : '🔗 Valor Recebido (Link)'}</span>
-              <span className="text-lg font-bold">{fmt(valorRecebido)}</span>
+            <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${formaPagamento === 'pix' ? 'bg-green-600' : formaPagamento === 'cartao' ? 'bg-blue-600' : 'bg-purple-600'}`}>
+              <span className="text-sm font-medium text-white">
+                {formaPagamento === 'pix' ? 'Pix' : formaPagamento === 'cartao' ? 'Cartao' : 'Link'}
+              </span>
+              <span className="text-lg font-bold text-white">{fmt(valorRecebido)}</span>
             </div>
           </div>
 
