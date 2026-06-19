@@ -37,9 +37,10 @@ export function calcularCustosPedido(qtdImas: number, config: ConfigMateriais): 
     return { qtd_imas: 0, custo_imas: 0, custo_impressao: 0, custo_saquinhos: 0, custo_caixa: 0, custo_envelope: 0, custo_papel_seda: 0, custo_cartao: 0, custo_total_pedido: 0 }
   }
   const r2 = (n: number) => Math.round(n * 100) / 100
-  const custoPorFoto = config.impressao_valor_folha / config.impressao_fotos_por_folha
+  // Impressão: paga por folha inteira (não proporcional por foto)
+  const folhasUsadas = Math.ceil(qtdImas / config.impressao_fotos_por_folha)
   const custo_imas = r2(qtdImas * config.ima_custo)
-  const custo_impressao = r2(qtdImas * custoPorFoto)
+  const custo_impressao = r2(folhasUsadas * config.impressao_valor_folha)
   const custo_saquinhos = r2(Math.ceil(qtdImas / 4) * config.saquinho_custo)
   const custo_caixa = r2(config.caixa_custo)
   const custo_envelope = r2(config.envelope_custo)
