@@ -1,5 +1,10 @@
 export const INSUMOS_PADRAO = [
-  { tipo: 'ima', nome: 'Ímã', unidade: 'unidade', estoque_minimo: 50 },
+  // 4 componentes do ímã — rastreados separadamente, custo compartilhado (R$3/conjunto)
+  { tipo: 'ima_magnetico', nome: 'Ímã Magnético', unidade: 'unidade', estoque_minimo: 50 },
+  { tipo: 'placa_plastico', nome: 'Placa de Plástico', unidade: 'unidade', estoque_minimo: 50 },
+  { tipo: 'placa_metal', nome: 'Placa de Metal', unidade: 'unidade', estoque_minimo: 50 },
+  { tipo: 'plastico_protecao', nome: 'Plástico de Proteção', unidade: 'unidade', estoque_minimo: 50 },
+  // Embalagem
   { tipo: 'caixa', nome: 'Caixa', unidade: 'unidade', estoque_minimo: 20 },
   { tipo: 'saquinho', nome: 'Saquinho', unidade: 'unidade', estoque_minimo: 25 },
   { tipo: 'envelope', nome: 'Envelope', unidade: 'unidade', estoque_minimo: 20 },
@@ -9,8 +14,12 @@ export const INSUMOS_PADRAO = [
 ]
 
 // Tipo → campo de custo em configuracoes_materiais
+// Os 4 componentes do ímã compartilham ima_custo (R$3 por conjunto de 4 peças)
 export const TIPO_PARA_CONFIG: Record<string, string> = {
-  ima: 'ima_custo',
+  ima_magnetico: 'ima_custo',
+  placa_plastico: 'ima_custo',
+  placa_metal: 'ima_custo',
+  plastico_protecao: 'ima_custo',
   caixa: 'caixa_custo',
   saquinho: 'saquinho_custo',
   envelope: 'envelope_custo',
@@ -22,8 +31,12 @@ export const TIPO_PARA_CONFIG: Record<string, string> = {
 export function calcularConsumo(qtdImas: number, fotosPerFolha: number = 12): Record<string, number> {
   if (qtdImas <= 0) return {}
   return {
-    ima: qtdImas,
-    folha_impressao: qtdImas / fotosPerFolha, // fração de folha
+    // 1 de cada componente por ímã produzido
+    ima_magnetico: qtdImas,
+    placa_plastico: qtdImas,
+    placa_metal: qtdImas,
+    plastico_protecao: qtdImas,
+    folha_impressao: qtdImas / fotosPerFolha,
     saquinho: Math.ceil(qtdImas / 4),
     caixa: 1,
     envelope: 1,
