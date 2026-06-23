@@ -3,12 +3,39 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ShoppingBag, Handshake, Gift } from 'lucide-react'
 import Link from 'next/link'
+
+type TipoCliente = 'venda' | 'parceria' | 'mimo'
+
+const TIPOS: { value: TipoCliente; label: string; desc: string; color: string; icon: any }[] = [
+  {
+    value: 'venda',
+    label: 'Venda',
+    desc: 'Cliente final, pagamento normal',
+    color: 'border-green-500 bg-green-50',
+    icon: ShoppingBag,
+  },
+  {
+    value: 'parceria',
+    label: 'Parceria',
+    desc: 'Revende para outras clientes, embrulhos separados',
+    color: 'border-blue-500 bg-blue-50',
+    icon: Handshake,
+  },
+  {
+    value: 'mimo',
+    label: 'Mimo',
+    desc: 'Recebe brindes, nao entra no caixa',
+    color: 'border-pink-500 bg-pink-50',
+    icon: Gift,
+  },
+]
 
 export default function NovoClientePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [tipo, setTipo] = useState<TipoCliente>('venda')
   const [form, setForm] = useState({
     nome: '',
     whatsapp: '',
@@ -36,6 +63,7 @@ export default function NovoClientePage() {
       email: form.email.trim() || null,
       endereco: form.endereco.trim() || null,
       observacoes: form.observacoes.trim() || null,
+      tipo,
     })
 
     if (error) {
@@ -53,6 +81,49 @@ export default function NovoClientePage() {
           <ArrowLeft size={18} className="text-gray-600" />
         </Link>
         <h1 className="text-xl font-bold text-gray-900">Novo Cliente</h1>
+      </div>
+
+      {/* Tipo de cliente */}
+      <div className="mb-5">
+        <label className="block text-sm font-medium text-gray-700 mb-3">Tipo de cliente *</label>
+        <div className="space-y-2">
+          {TIPOS.map(t => {
+            const Icon = t.icon
+            const ativo = tipo === t.value
+            return (
+              <button
+                key={t.value}
+                onClick={() => setTipo(t.value)}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all text-left ${
+                  ativo ? t.color : 'border-gray-100 bg-white'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  ativo
+                    ? t.value === 'venda' ? 'bg-green-100' : t.value === 'parceria' ? 'bg-blue-100' : 'bg-pink-100'
+                    : 'bg-gray-100'
+                }`}>
+                  <Icon size={18} className={
+                    ativo
+                      ? t.value === 'venda' ? 'text-green-600' : t.value === 'parceria' ? 'text-blue-600' : 'text-pink-500'
+                      : 'text-gray-400'
+                  } />
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${ativo ? 'text-gray-900' : 'text-gray-600'}`}>{t.label}</p>
+                  <p className="text-xs text-gray-400">{t.desc}</p>
+                </div>
+                <div className={`ml-auto w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  ativo
+                    ? t.value === 'venda' ? 'border-green-500 bg-green-500' : t.value === 'parceria' ? 'border-blue-500 bg-blue-500' : 'border-pink-500 bg-pink-500'
+                    : 'border-gray-300'
+                }`}>
+                  {ativo && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="space-y-4">

@@ -57,7 +57,15 @@ export default async function ClientesPage() {
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">{cliente.nome}</h3>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h3 className="font-semibold text-gray-900 truncate">{cliente.nome}</h3>
+                    {cliente.tipo === 'parceria' && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600 flex-shrink-0">Parceria</span>
+                    )}
+                    {cliente.tipo === 'mimo' && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-pink-100 text-pink-600 flex-shrink-0">Mimo</span>
+                    )}
+                  </div>
                   {cliente.whatsapp && (
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
                       <Phone size={12} />

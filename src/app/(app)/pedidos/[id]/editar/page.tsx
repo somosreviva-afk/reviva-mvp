@@ -40,6 +40,7 @@ export default function EditarPedidoPage() {
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
+  const [qtdEmbrulhos, setQtdEmbrulhos] = useState(1)
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
@@ -54,7 +55,7 @@ export default function EditarPedidoPage() {
     return s + qtdItem * i.quantidade
   }, 0)
 
-  const custos = calcularCustosPedido(qtdImasTotal, configMateriais)
+  const custos = calcularCustosPedido(qtdImasTotal, configMateriais, qtdEmbrulhos)
   const lucroReal = valorRecebido - custos.custo_total_pedido
 
   useEffect(() => {
@@ -82,6 +83,7 @@ export default function EditarPedidoPage() {
         setTransportadora(pedido.transportadora || '')
         setPrazoEntrega(pedido.prazo_entrega || '')
         setFormaPagamento(pedido.forma_pagamento || 'pix')
+        setQtdEmbrulhos(pedido.qtd_embrulhos || 1)
       }
 
       if (itensPedido && p) {
@@ -168,6 +170,7 @@ export default function EditarPedidoPage() {
       valor_total: total,
       forma_pagamento: formaPagamento,
       valor_recebido: valorRecebido,
+      qtd_embrulhos: qtdEmbrulhos,
       qtd_imas: custos.qtd_imas,
       custo_imas: custos.custo_imas,
       custo_impressao: custos.custo_impressao,
@@ -358,6 +361,30 @@ export default function EditarPedidoPage() {
           </div>
         )}
       </div>
+
+      {/* Embrulhos separados (parceria) */}
+      {qtdImasTotal > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Embrulhos separados</p>
+              <p className="text-xs text-gray-400">Parceria: cada pacote leva caixinha + cartao + papel</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setQtdEmbrulhos(q => Math.max(1, q - 1))}
+                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold">−</button>
+              <span className="w-8 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
+              <button onClick={() => setQtdEmbrulhos(q => q + 1)}
+                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold">+</button>
+            </div>
+          </div>
+          {qtdEmbrulhos > 1 && (
+            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
+              {qtdEmbrulhos} embrulhos: {qtdEmbrulhos} caixas + {qtdEmbrulhos} cartoes + {qtdEmbrulhos} papeis seda
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Demais campos */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 space-y-4">

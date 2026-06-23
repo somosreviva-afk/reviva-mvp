@@ -32,20 +32,28 @@ export interface CustosPedido {
   custo_total_pedido: number
 }
 
-export function calcularCustosPedido(qtdImas: number, config: ConfigMateriais): CustosPedido {
+// qtdEmbrulhos: quantos pacotes separados (padrão 1)
+// Ex: Nayara pede 12 ímãs em 4 embrulhos de 3 → qtdEmbrulhos = 4
+// Multiplica caixa, cartão e papel seda por qtdEmbrulhos
+export function calcularCustosPedido(
+  qtdImas: number,
+  config: ConfigMateriais,
+  qtdEmbrulhos: number = 1
+): CustosPedido {
   if (qtdImas <= 0) {
     return { qtd_imas: 0, custo_imas: 0, custo_impressao: 0, custo_saquinhos: 0, custo_caixa: 0, custo_envelope: 0, custo_papel_seda: 0, custo_cartao: 0, custo_total_pedido: 0 }
   }
-  const r2 = (n: number) => Math.round(n * 100) / 100
-  // Impressão: paga por folha inteira (não proporcional por foto)
+  const n = Math.max(1, qtdEmbrulhos)
+  const r2 = (v: number) => Math.round(v * 100) / 100
   const folhasUsadas = Math.ceil(qtdImas / config.impressao_fotos_por_folha)
   const custo_imas = r2(qtdImas * config.ima_custo)
   const custo_impressao = r2(folhasUsadas * config.impressao_valor_folha)
   const custo_saquinhos = r2(Math.ceil(qtdImas / 4) * config.saquinho_custo)
-  const custo_caixa = r2(config.caixa_custo)
+  // Embrulho separado: cada pacote tem sua própria caixa, cartão e papel seda
+  const custo_caixa = r2(n * config.caixa_custo)
   const custo_envelope = r2(config.envelope_custo)
-  const custo_papel_seda = r2((qtdImas <= 12 ? 1 : 2) * config.papel_seda_custo)
-  const custo_cartao = r2(config.cartao_custo)
+  const custo_papel_seda = r2(n * config.papel_seda_custo)
+  const custo_cartao = r2(n * config.cartao_custo)
   const custo_total_pedido = r2(custo_imas + custo_impressao + custo_saquinhos + custo_caixa + custo_envelope + custo_papel_seda + custo_cartao)
   return { qtd_imas: qtdImas, custo_imas, custo_impressao, custo_saquinhos, custo_caixa, custo_envelope, custo_papel_seda, custo_cartao, custo_total_pedido }
 }
