@@ -90,9 +90,9 @@ async function getDashboardData(empresaId: string, dataInicio: string) {
       .not('status', 'in', '(entregue,cancelado)')
       .order('created_at', { ascending: false })
       .limit(5),
+    supabase.from('pedidos').select('id').eq('empresa_id', empresaId).eq('status', 'producao'),
     supabase.from('pedidos').select('id').eq('empresa_id', empresaId).eq('status', 'enviado'),
-    supabase.from('pedidos').select('id').eq('empresa_id', empresaId).in('status', ['producao', 'enviado']),
-    supabase.from('pedidos').select('id').eq('empresa_id', empresaId).in('status', ['entregue', 'finalizado']),
+    supabase.from('pedidos').select('id').eq('empresa_id', empresaId).eq('status', 'entregue'),
   ])
 
   // Estoque
@@ -115,9 +115,9 @@ async function getDashboardData(empresaId: string, dataInicio: string) {
     total_imas: totalImas,
     total_pedidos_mes: totalPedidosMes,
     pedidos_andamento: (pedidosAbertos || []).length,
-    pedidos_enviados: (pedidosEnviados || []).length,
-    pedidos_transporte: (pedidosTransporte || []).length,
-    pedidos_finalizados: (pedidosFinalizados || []).length,
+    pedidos_producao: (pedidosEnviados || []).length,
+    pedidos_enviados: (pedidosTransporte || []).length,
+    pedidos_entregues: (pedidosFinalizados || []).length,
     pedidos_recentes: pedidosRecentes || [],
     total_insumos: (insumos || []).length,
     insumos_baixos: insumosBaixos,
@@ -244,28 +244,28 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {/* Indicadores de Envio */}
+      {/* Status dos Pedidos */}
       <div className="grid grid-cols-3 gap-2">
         <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
-          <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center mb-2">
-            <Send size={15} className="text-blue-600" />
+          <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center mb-2">
+            <Package size={15} className="text-purple-600" />
           </div>
-          <p className="text-[10px] text-gray-500 mb-0.5">📦 Enviados</p>
-          <p className="text-base font-bold text-blue-700">{dados.pedidos_enviados}</p>
+          <p className="text-[10px] text-gray-500 mb-0.5">Em Producao</p>
+          <p className="text-base font-bold text-purple-700">{dados.pedidos_producao}</p>
         </Link>
         <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
-          <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center mb-2">
-            <Truck size={15} className="text-orange-600" />
+          <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center mb-2">
+            <Truck size={15} className="text-blue-600" />
           </div>
-          <p className="text-[10px] text-gray-500 mb-0.5">🚚 Transporte</p>
-          <p className="text-base font-bold text-orange-700">{dados.pedidos_transporte}</p>
+          <p className="text-[10px] text-gray-500 mb-0.5">Enviado</p>
+          <p className="text-base font-bold text-blue-700">{dados.pedidos_enviados}</p>
         </Link>
         <Link href="/pedidos" className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm block">
           <div className="w-8 h-8 rounded-xl bg-green-100 flex items-center justify-center mb-2">
             <CheckCircle2 size={15} className="text-green-600" />
           </div>
-          <p className="text-[10px] text-gray-500 mb-0.5">✅ Finalizados</p>
-          <p className="text-base font-bold text-green-700">{dados.pedidos_finalizados}</p>
+          <p className="text-[10px] text-gray-500 mb-0.5">Entregue</p>
+          <p className="text-base font-bold text-green-700">{dados.pedidos_entregues}</p>
         </Link>
       </div>
 
