@@ -57,6 +57,27 @@ function getDataInicio(periodo: Periodo): string {
 async function getDashboardData(empresaId: string, dataInicio: string) {
   const supabase = await createClient()
 
+  // Meta de recuperação do investimento — todos os pedidos de venda, todos os tempos
+  const { data: todosPedidos } = await supabase
+    .from('pedidos')
+    .select('valor_recebido, valor_total, tipo')
+    .eq('empresa_id', empresaId)
+    .neq('status', 'cancelado')
+  const totalRecebidoGeral = (todosPedidos || [])
+    .filter(p => p.tipo !== 'mimo')
+    .reduce((s, p) => s + Number(p.valor_recebido ?? p.valor_total ?? 0), 0)
+
+  const { data: cfg } = await supabase
+    .from('configuracoes_materiais')
+    .select('investimento_inicial')
+    .eq('empresa_id', empresaId)
+    .single()
+  const investimentoInicial = Number(cfg?.investimento_inicial ?? 0)
+  const faltaRecuperar = Math.max(0, investimentoInicial - totalRecebidoGeral)
+  const pctRecuperado = investimentoInicial > 0
+    ? Math.min(100, (totalRecebidoGeral / investimentoInicial) * 100)
+    : 100
+
   // Pedidos do período (não cancelados)
   const { data: pedidosMes } = await supabase
     .from('pedidos')
@@ -121,6 +142,10 @@ async function getDashboardData(empresaId: string, dataInicio: string) {
     pedidos_recentes: pedidosRecentes || [],
     total_insumos: (insumos || []).length,
     insumos_baixos: insumosBaixos,
+    investimento_inicial: investimentoInicial,
+    total_recebido_geral: totalRecebidoGeral,
+    falta_recuperar: faltaRecuperar,
+    pct_recuperado: pctRecuperado,
   }
 }
 
@@ -157,6 +182,44 @@ export default async function DashboardPage({
           <Settings size={20} className="text-gray-500" />
         </Link>
       </div>
+
+      {/* META: Zerar investimento */}
+      {dados.investimento_inicial > 0 && (
+        dados.falta_recuperar === 0 ? (
+          <div className="bg-green-600 rounded-2xl p-5 text-white">
+            <p className="text-green-200 text-sm mb-1">Meta atingida!</p>
+            <p className="text-2xl font-bold">Voce esta lucrando!</p>
+            <p className="text-green-200 text-xs mt-1">
+              Investimento de {formatCurrency(dados.investimento_inicial)} recuperado
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Foco principal</p>
+                <p className="text-base font-bold text-gray-900">Zerar o investimento</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(dados.falta_recuperar)}</p>
+                <p className="text-[10px] text-gray-400">ainda falta recuperar</p>
+              </div>
+            </div>
+
+            {/* Barra de progresso */}
+            <div className="w-full bg-gray-100 rounded-full h-3 mb-2">
+              <div
+                className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                style={{ width: `${dados.pct_recuperado}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>{formatCurrency(dados.total_recebido_geral)} recuperado</span>
+              <span>{dados.pct_recuperado.toFixed(0)}% de {formatCurrency(dados.investimento_inicial)}</span>
+            </div>
+          </div>
+        )
+      )}
 
       {/* Filtro de período */}
       <div className="flex gap-1.5 bg-gray-100 p-1 rounded-xl">
