@@ -390,57 +390,69 @@ export default function NovoPedidoPage() {
             <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
               <span className="text-base">🤝</span>
             </div>
-            <p className="text-sm font-bold text-blue-800">Beneficios da Parceria</p>
+            <p className="text-sm font-bold text-blue-800">Beneficio da Parceria</p>
+            <p className="text-xs text-gray-400 ml-1">escolha um</p>
           </div>
 
-          {/* Embrulhos separados */}
-          <div className="bg-white rounded-xl p-3 mb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Embrulhos separados</p>
-                <p className="text-xs text-gray-400">Cada pacote: caixinha + cartao + papel</p>
+          <div className="space-y-2">
+            {/* Opção 1: Embrulhos separados */}
+            <button
+              onClick={() => { setParceliaDesconto(false); setQtdEmbrulhos(q => q === 1 ? 2 : q) }}
+              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                !parceliaDesconto ? 'border-blue-400 bg-white' : 'border-transparent bg-white/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Embrulhos separados</p>
+                  <p className="text-xs text-gray-400">Cada pacote: caixinha + cartao + papel</p>
+                </div>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  !parceliaDesconto ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                }`}>
+                  {!parceliaDesconto && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setQtdEmbrulhos(q => Math.max(1, q - 1))}
-                  className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600"
-                >−</button>
-                <span className="w-6 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
-                <button
-                  onClick={() => setQtdEmbrulhos(q => q + 1)}
-                  className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-700"
-                >+</button>
-              </div>
-            </div>
-            {qtdEmbrulhos > 1 && (
-              <p className="text-xs text-blue-600 mt-2">
-                {qtdEmbrulhos} caixas + {qtdEmbrulhos} cartoes + {qtdEmbrulhos} papeis seda
-              </p>
-            )}
-          </div>
+              {!parceliaDesconto && (
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+                  <span className="text-xs text-gray-500 flex-1">Quantos embrulhos?</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => Math.max(1, q - 1)) }}
+                    className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600"
+                  >−</button>
+                  <span className="w-6 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => q + 1) }}
+                    className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-700"
+                  >+</button>
+                </div>
+              )}
+            </button>
 
-          {/* Desconto 10% */}
-          <button
-            onClick={() => setParceliaDesconto(!parceliaDesconto)}
-            className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-              parceliaDesconto ? 'bg-green-100 border border-green-300' : 'bg-white border border-gray-100'
-            }`}
-          >
-            <div className="text-left">
-              <p className={`text-sm font-medium ${parceliaDesconto ? 'text-green-800' : 'text-gray-700'}`}>
-                Desconto 10%
-              </p>
-              <p className="text-xs text-gray-400">
-                {parceliaDesconto && subtotal > 0
-                  ? `- R$ ${descontoParc.toFixed(2).replace('.', ',')}`
-                  : 'Aplicar desconto de parceria'}
-              </p>
-            </div>
-            <div className={`w-10 h-6 rounded-full transition-all ${parceliaDesconto ? 'bg-green-500' : 'bg-gray-200'}`}>
-              <div className="w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all"
-                style={{ marginLeft: parceliaDesconto ? '18px' : '2px' }} />
-            </div>
-          </button>
+            {/* Opção 2: Desconto 10% */}
+            <button
+              onClick={() => { setParceliaDesconto(true); setQtdEmbrulhos(1) }}
+              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                parceliaDesconto ? 'border-green-400 bg-white' : 'border-transparent bg-white/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Desconto 10%</p>
+                  <p className="text-xs text-gray-400">
+                    {parceliaDesconto && subtotal > 0
+                      ? `- R$ ${descontoParc.toFixed(2).replace('.', ',')} no total`
+                      : 'Desconto aplicado no valor da venda'}
+                  </p>
+                </div>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  parceliaDesconto ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                }`}>
+                  {parceliaDesconto && <div className="w-2 h-2 rounded-full bg-white" />}
+                </div>
+              </div>
+            </button>
+          </div>
         </div>
       )}
 
