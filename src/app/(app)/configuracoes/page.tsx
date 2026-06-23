@@ -122,39 +122,40 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
 
-      {/* Materiais */}
+      {/* Custo dos materiais — automático pelos lotes */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
           <Package size={14} className="text-gray-400" />
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Custo de Materiais</p>
         </div>
-        <div className="p-4 space-y-3">
-          {([
-            { key: 'ima_custo', label: 'Ímã (por unidade)' },
-            { key: 'caixa_custo', label: 'Caixa (por pedido)' },
-            { key: 'saquinho_custo', label: 'Saquinho (por unidade)' },
-            { key: 'envelope_custo', label: 'Envelope (por pedido)' },
-            { key: 'papel_seda_custo', label: 'Papel Seda (por unidade)' },
-            { key: 'cartao_custo', label: 'Cartão Reviva (por pedido)' },
-          ] as { key: keyof ConfigMateriais; label: string }[]).map(({ key, label }) => (
-            <div key={key} className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">{label}</span>
-              <div className="flex items-center gap-1">
-                <span className="text-sm text-gray-400">R$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={materiais[key]}
-                  onChange={e => setM(key, e.target.value)}
-                  className={inputCls}
-                />
+        <div className="p-4">
+          <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4">
+            <p className="text-xs font-semibold text-blue-700 mb-1">Gerenciado automaticamente</p>
+            <p className="text-xs text-blue-600">
+              O custo de cada material é atualizado automaticamente quando o lote anterior esgota.
+              Para alterar, registre uma nova compra em Estoque → Entrada.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {([
+              { key: 'ima_custo', label: 'Ímã (por conjunto)' },
+              { key: 'caixa_custo', label: 'Caixa' },
+              { key: 'saquinho_custo', label: 'Saquinho' },
+              { key: 'envelope_custo', label: 'Envelope' },
+              { key: 'papel_seda_custo', label: 'Papel Seda' },
+              { key: 'cartao_custo', label: 'Cartão Reviva' },
+            ] as { key: keyof ConfigMateriais; label: string }[]).map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between py-1">
+                <span className="text-sm text-gray-600">{label}</span>
+                <span className="text-sm font-semibold text-gray-800">
+                  R$ {Number(materiais[key]).toFixed(2)}
+                </span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* Impressão */}
+        {/* Impressão — ainda manual pois não é estoque */}
         <div className="px-4 pb-1 border-t border-gray-100 pt-3">
           <div className="flex items-center gap-2 mb-3">
             <Printer size={13} className="text-gray-400" />
@@ -162,7 +163,7 @@ export default function ConfiguracoesPage() {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Valor da folha</span>
+              <span className="text-sm text-gray-700">Valor por pedido</span>
               <div className="flex items-center gap-1">
                 <span className="text-sm text-gray-400">R$</span>
                 <input
@@ -175,21 +176,10 @@ export default function ConfiguracoesPage() {
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Fotos por folha</span>
-              <input
-                type="number"
-                step="1"
-                min="1"
-                value={materiais.impressao_fotos_por_folha}
-                onChange={e => setM('impressao_fotos_por_folha', e.target.value)}
-                className={inputCls}
-              />
-            </div>
             <div className="bg-gray-50 rounded-xl px-3 py-2 flex justify-between items-center">
-              <span className="text-xs text-gray-500">Custo por foto calculado</span>
+              <span className="text-xs text-gray-500">Custo fixo por pedido</span>
               <span className="text-sm font-semibold text-green-700">
-                R$ {custoPorFoto.toFixed(4)}
+                R$ {Number(materiais.impressao_valor_folha).toFixed(2)}
               </span>
             </div>
           </div>
@@ -201,11 +191,8 @@ export default function ConfiguracoesPage() {
             disabled={salvandoMateriais}
             className="w-full py-3 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
           >
-            {savedMsg ? '✓ Salvo!' : salvandoMateriais ? 'Salvando...' : 'Salvar configurações'}
+            {savedMsg ? '✓ Salvo!' : salvandoMateriais ? 'Salvando...' : 'Salvar impressão'}
           </button>
-          <p className="text-xs text-gray-400 mt-2 text-center">
-            Alterações valem para os próximos pedidos
-          </p>
         </div>
       </div>
 

@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Clock, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { TIPO_PARA_CONFIG, garantirInsumos } from '@/lib/utils/estoque'
+import { TIPO_PARA_CONFIG, TIPOS_IMA, garantirInsumos } from '@/lib/utils/estoque'
+
+const IMA_GRUPO_ID = '__ima_grupo__'
 
 export default function EntradaEstoquePage() {
   const router = useRouter()
@@ -15,13 +17,23 @@ export default function EntradaEstoquePage() {
   const [empresaId, setEmpresaId] = useState('')
 
   // Form
-  const [insumoId, setInsumoId] = useState('')
+  const [insumoId, setInsumoId] = useState(IMA_GRUPO_ID)
   const [quantidade, setQuantidade] = useState('')
   const [valorPago, setValorPago] = useState('')
   const [data, setData] = useState(new Date().toISOString().split('T')[0])
   const [observacoes, setObservacoes] = useState('')
 
-  const insumoSelecionado = insumos.find(i => i.id === insumoId)
+  const isImaGrupo = insumoId === IMA_GRUPO_ID
+  const insumoSelecionado = isImaGrupo ? null : insumos.find(i => i.id === insumoId)
+
+  // Para determinar se o lote vai entrar como ativo ou pendente
+  const imaRef = insumos.find(i => i.tipo === 'ima_magnetico')
+  const estoqueReferencia = isImaGrupo
+    ? Number(imaRef?.quantidade || 0)
+    : Number(insumoSelecionado?.quantidade || 0)
+
+  const lotStatus: 'ativo' | 'pendente' = estoqueReferencia === 0 ? 'ativo' : 'pendente'
+
   const custoUnitario = quantidade && valorPago && parseFloat(quantidade) > 0
     ? parseFloat(valorPago) / parseFloat(quantidade)
     : null
@@ -37,54 +49,82 @@ export default function EntradaEstoquePage() {
       await garantirInsumos(supabase, eid)
       const { data: ins } = await supabase.from('insumos').select('*').eq('empresa_id', eid).order('nome')
       setInsumos(ins || [])
-      if (ins && ins.length > 0) setInsumoId(ins[0].id)
       setLoading(false)
     }
     carregar()
   }, [])
 
   async function salvar() {
-    if (!insumoId || !quantidade || parseFloat(quantidade) <= 0) return alert('Informe o insumo e a quantidade')
-    setSalvando(true)
-
-    const supabase = createClient()
     const qtd = parseFloat(quantidade)
+    if (!insumoId || !qtd || qtd <= 0) return alert('Informe o material e a quantidade')
+
+    setSalvando(true)
+    const supabase = createClient()
     const vp = parseFloat(valorPago) || 0
     const cu = vp > 0 && qtd > 0 ? vp / qtd : null
+    const hoje = data
 
-    // Registra movimentação
-    await supabase.from('movimentacoes_estoque').insert({
-      empresa_id: empresaId,
-      insumo_id: insumoId,
-      tipo: 'entrada',
-      quantidade: qtd,
-      valor_pago: vp || null,
-      custo_unitario: cu,
-      observacoes: observacoes || null,
-      data,
-    })
-
-    // Atualiza quantidade e custo unitário do insumo
-    const atualInsumo = insumos.find(i => i.id === insumoId)
-    const novaQtd = Number(atualInsumo?.quantidade || 0) + qtd
-
-    const updateInsumo: any = {
-      quantidade: Number(novaQtd.toFixed(3)),
-      updated_at: new Date().toISOString(),
+    // Determina quais insumos registrar
+    let targetInsumos: any[] = []
+    if (isImaGrupo) {
+      // Todos os 4 componentes do ímã
+      targetInsumos = TIPOS_IMA.map(tipo => insumos.find(i => i.tipo === tipo)).filter(Boolean)
+    } else {
+      const ins = insumos.find(i => i.id === insumoId)
+      if (ins) targetInsumos = [ins]
     }
-    if (cu) updateInsumo.custo_unitario = Number(cu.toFixed(4))
 
-    await supabase.from('insumos').update(updateInsumo).eq('id', insumoId)
+    for (let idx = 0; idx < targetInsumos.length; idx++) {
+      const insumo = targetInsumos[idx]
+      const estoqueAtual = Number(insumo.quantidade || 0)
+      const status: 'ativo' | 'pendente' = estoqueAtual === 0 ? 'ativo' : 'pendente'
 
-    // Atualiza custo em configuracoes_materiais se houver mapeamento
-    if (cu && atualInsumo?.tipo) {
-      const campoConfig = TIPO_PARA_CONFIG[atualInsumo.tipo]
-      if (campoConfig) {
-        await supabase
-          .from('configuracoes_materiais')
-          .update({ [campoConfig]: Number(cu.toFixed(4)) })
-          .eq('empresa_id', empresaId)
+      // Cria o lote
+      await supabase.from('lotes_estoque').insert({
+        empresa_id: empresaId,
+        insumo_id: insumo.id,
+        quantidade_inicial: qtd,
+        quantidade_restante: qtd,
+        custo_unitario: cu != null ? Number(cu.toFixed(4)) : null,
+        status,
+        data_compra: hoje,
+        observacoes: observacoes || null,
+      })
+
+      // Atualiza quantidade total no insumo
+      const novaQtd = estoqueAtual + qtd
+      const updateInsumo: any = {
+        quantidade: Number(novaQtd.toFixed(3)),
+        updated_at: new Date().toISOString(),
       }
+      // Se o lote já entra ativo, atualiza o custo_unitario imediatamente
+      if (status === 'ativo' && cu != null) {
+        updateInsumo.custo_unitario = Number(cu.toFixed(4))
+      }
+      await supabase.from('insumos').update(updateInsumo).eq('id', insumo.id)
+
+      // Se ativo, atualiza configuracoes_materiais agora
+      if (status === 'ativo' && cu != null && insumo.tipo) {
+        const campoConfig = TIPO_PARA_CONFIG[insumo.tipo]
+        if (campoConfig) {
+          await supabase
+            .from('configuracoes_materiais')
+            .update({ [campoConfig]: Number(cu.toFixed(4)) })
+            .eq('empresa_id', empresaId)
+        }
+      }
+
+      // Registra movimentação (valor_pago só no primeiro do grupo de ímãs)
+      await supabase.from('movimentacoes_estoque').insert({
+        empresa_id: empresaId,
+        insumo_id: insumo.id,
+        tipo: 'entrada',
+        quantidade: qtd,
+        valor_pago: idx === 0 ? (vp || null) : null,
+        custo_unitario: cu != null ? Number(cu.toFixed(4)) : null,
+        observacoes: observacoes || null,
+        data: hoje,
+      })
     }
 
     router.push('/estoque')
@@ -98,6 +138,9 @@ export default function EntradaEstoquePage() {
     </div>
   )
 
+  // Separa os insumos de ímã dos de embalagem para exibição
+  const insumosEmbalagem = insumos.filter(i => !TIPOS_IMA.includes(i.tipo))
+
   return (
     <div className="p-4">
       <div className="flex items-center gap-3 pt-4 mb-6">
@@ -108,6 +151,7 @@ export default function EntradaEstoquePage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 space-y-4">
+
         {/* Material */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Material *</label>
@@ -116,22 +160,34 @@ export default function EntradaEstoquePage() {
             onChange={e => setInsumoId(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
           >
-            {insumos.map(i => (
-              <option key={i.id} value={i.id}>{i.nome}</option>
-            ))}
+            {/* Opção especial para os 4 componentes do ímã juntos */}
+            <option value={IMA_GRUPO_ID}>🧲 Componentes do Ímã (todos os 4 juntos)</option>
+            <optgroup label="Embalagem">
+              {insumosEmbalagem.map(i => (
+                <option key={i.id} value={i.id}>{i.nome}</option>
+              ))}
+            </optgroup>
           </select>
-          {insumoSelecionado && (
+
+          {/* Info do estoque atual */}
+          {isImaGrupo ? (
+            <p className="text-xs text-gray-400 mt-1">
+              Estoque atual: {Number(imaRef?.quantidade || 0).toFixed(0)} unidades de cada componente
+            </p>
+          ) : insumoSelecionado ? (
             <p className="text-xs text-gray-400 mt-1">
               Estoque atual: {Number(insumoSelecionado.quantidade).toFixed(
                 insumoSelecionado.unidade === 'folha' ? 1 : 0
               )} {insumoSelecionado.unidade}s
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* Quantidade */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Quantidade comprada *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {isImaGrupo ? 'Quantidade (kits de ímã)' : 'Quantidade comprada'} *
+          </label>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -139,18 +195,25 @@ export default function EntradaEstoquePage() {
               onChange={e => setQuantidade(e.target.value)}
               placeholder="0"
               min="0"
-              step="0.5"
+              step="1"
               className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
-            <span className="text-sm text-gray-500 w-16 text-center">
-              {insumoSelecionado?.unidade || 'un'}
+            <span className="text-sm text-gray-500 w-20 text-center">
+              {isImaGrupo ? 'kits' : (insumoSelecionado?.unidade || 'un')}
             </span>
           </div>
+          {isImaGrupo && (
+            <p className="text-xs text-gray-400 mt-1">
+              1 kit = 1 ímã magnético + 1 placa de plástico + 1 placa de metal + 1 plástico de proteção
+            </p>
+          )}
         </div>
 
         {/* Valor pago */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Valor pago (R$)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            Valor total pago (R$)
+          </label>
           <input
             type="number"
             value={valorPago}
@@ -162,18 +225,44 @@ export default function EntradaEstoquePage() {
           />
         </div>
 
-        {/* Custo unitário calculado */}
+        {/* Custo calculado */}
         {custoUnitario !== null && (
-          <div className="bg-green-50 rounded-xl px-4 py-3 flex justify-between items-center">
+          <div className="bg-blue-50 rounded-xl px-4 py-3 flex justify-between items-center">
             <div>
-              <p className="text-xs font-semibold text-green-700">Custo unitário calculado</p>
-              <p className="text-xs text-green-600 mt-0.5">
-                Será usado nos próximos pedidos
+              <p className="text-xs font-semibold text-blue-700">
+                {isImaGrupo ? 'Custo por ímã (conjunto)' : 'Custo unitário'}
+              </p>
+              <p className="text-xs text-blue-500 mt-0.5">
+                {isImaGrupo ? 'Valor que entra no cálculo de cada pedido' : 'Por unidade deste material'}
               </p>
             </div>
-            <p className="text-lg font-bold text-green-700">
-              {fmt(custoUnitario)}
-            </p>
+            <p className="text-lg font-bold text-blue-700">{fmt(custoUnitario)}</p>
+          </div>
+        )}
+
+        {/* Status do lote */}
+        {quantidade && parseFloat(quantidade) > 0 && (
+          <div className={`rounded-xl px-4 py-3 flex items-center gap-3 ${
+            lotStatus === 'ativo'
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-orange-50 border border-orange-200'
+          }`}>
+            {lotStatus === 'ativo' ? (
+              <Zap size={16} className="text-green-600 shrink-0" />
+            ) : (
+              <Clock size={16} className="text-orange-500 shrink-0" />
+            )}
+            <div>
+              <p className={`text-xs font-semibold ${lotStatus === 'ativo' ? 'text-green-700' : 'text-orange-700'}`}>
+                {lotStatus === 'ativo' ? 'Entra agora (estoque zerado)' : 'Lote pendente'}
+              </p>
+              <p className={`text-xs mt-0.5 ${lotStatus === 'ativo' ? 'text-green-600' : 'text-orange-600'}`}>
+                {lotStatus === 'ativo'
+                  ? 'O custo será atualizado imediatamente'
+                  : `Aguardando esgotar as ${estoqueReferencia.toFixed(0)} unidades atuais`
+                }
+              </p>
+            </div>
           </div>
         )}
 

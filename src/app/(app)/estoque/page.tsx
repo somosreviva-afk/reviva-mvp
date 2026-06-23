@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Plus, AlertTriangle, Package, History } from 'lucide-react'
+import { Plus, AlertTriangle, Package, History, Clock } from 'lucide-react'
 import Link from 'next/link'
-import { garantirInsumos } from '@/lib/utils/estoque'
+import { garantirInsumos, TIPOS_IMA } from '@/lib/utils/estoque'
 
 export default function EstoquePage() {
   const [tab, setTab] = useState<'insumos' | 'historico'>('insumos')
   const [insumos, setInsumos] = useState<any[]>([])
+  const [lotesPendentes, setLotesPendentes] = useState<Record<string, any[]>>({}) // insumo_id → lotes pendentes
   const [movimentacoes, setMovimentacoes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<string | null>(null)
@@ -22,7 +23,7 @@ export default function EstoquePage() {
 
     await garantirInsumos(supabase, empresaId)
 
-    const [{ data: ins }, { data: mov }] = await Promise.all([
+    const [{ data: ins }, { data: mov }, { data: lotesPend }] = await Promise.all([
       supabase.from('insumos').select('*').eq('empresa_id', empresaId).order('nome'),
       supabase
         .from('movimentacoes_estoque')
@@ -30,9 +31,23 @@ export default function EstoquePage() {
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: false })
         .limit(60),
+      supabase
+        .from('lotes_estoque')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('status', 'pendente')
+        .order('created_at', { ascending: true }),
     ])
 
+    // Agrupa lotes pendentes por insumo_id
+    const pendMap: Record<string, any[]> = {}
+    ;(lotesPend || []).forEach((l: any) => {
+      if (!pendMap[l.insumo_id]) pendMap[l.insumo_id] = []
+      pendMap[l.insumo_id].push(l)
+    })
+
     setInsumos(ins || [])
+    setLotesPendentes(pendMap)
     setMovimentacoes(mov || [])
     setLoading(false)
   }
@@ -49,20 +64,97 @@ export default function EstoquePage() {
   const alertas = insumos.filter(i => Number(i.quantidade) < Number(i.estoque_minimo) && Number(i.estoque_minimo) > 0)
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+  // Separa ímãs da embalagem
+  const insumoIma = insumos.filter(i => TIPOS_IMA.includes(i.tipo))
+  const insumoEmbalagem = insumos.filter(i => !TIPOS_IMA.includes(i.tipo))
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
+  function InsumoCard({ insumo }: { insumo: any }) {
+    const qtd = Number(insumo.quantidade)
+    const min = Number(insumo.estoque_minimo)
+    const baixo = min > 0 && qtd < min
+    const pendentes = lotesPendentes[insumo.id] || []
+    const proximoLote = pendentes[0]
+
+    return (
+      <div className={`bg-white rounded-2xl border shadow-sm p-4 ${baixo ? 'border-orange-200' : 'border-gray-100'}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="font-semibold text-gray-900">{insumo.nome}</p>
+              {baixo && (
+                <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">
+                  ⚠️ BAIXO
+                </span>
+              )}
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-bold ${baixo ? 'text-orange-600' : 'text-gray-900'}`}>
+                {insumo.unidade === 'folha' ? Number(qtd).toFixed(1) : Number(qtd).toFixed(0)}
+              </span>
+              <span className="text-sm text-gray-400">{insumo.unidade}{qtd !== 1 ? 's' : ''}</span>
+            </div>
+
+            <div className="flex gap-3 mt-1.5 flex-wrap">
+              {insumo.custo_unitario > 0 && (
+                <span className="text-xs text-gray-500">
+                  Custo atual: {fmt(Number(insumo.custo_unitario))}/{insumo.tipo === 'folha_impressao' ? 'folha' : 'un'}
+                </span>
+              )}
+              {editando === insumo.id ? (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-400">Mín:</span>
+                  <input
+                    type="number"
+                    value={editMin}
+                    onChange={e => setEditMin(e.target.value)}
+                    className="w-16 border border-gray-200 rounded px-1.5 py-0.5 text-xs"
+                    autoFocus
+                  />
+                  <button onClick={() => salvarMinimo(insumo.id)} className="text-xs text-green-600 font-semibold">✓</button>
+                  <button onClick={() => setEditando(null)} className="text-xs text-gray-400">✕</button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setEditando(insumo.id); setEditMin(String(insumo.estoque_minimo)) }}
+                  className="text-xs text-gray-400 underline"
+                >
+                  Mín: {Number(insumo.estoque_minimo).toFixed(0)} {insumo.unidade}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Lote pendente */}
+        {proximoLote && (
+          <div className="mt-3 bg-orange-50 rounded-xl px-3 py-2 flex items-center gap-2">
+            <Clock size={13} className="text-orange-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-orange-700">
+                {pendentes.length} lote{pendentes.length > 1 ? 's' : ''} pendente{pendentes.length > 1 ? 's' : ''}
+              </p>
+              <p className="text-xs text-orange-600">
+                Próximo: {proximoLote.quantidade_inicial.toFixed(0)} un
+                {proximoLote.custo_unitario ? ` · ${fmt(Number(proximoLote.custo_unitario))}/un` : ''}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="p-4 pb-28">
       {/* Header */}
       <div className="flex items-center gap-3 pt-4 mb-4">
-        <Link href="/produtos" className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </Link>
-        <h1 className="text-xl font-bold text-gray-900">Estoque de Insumos</h1>
+        <h1 className="text-xl font-bold text-gray-900">Estoque</h1>
       </div>
 
       {/* Alerta estoque baixo */}
@@ -70,7 +162,7 @@ export default function EstoquePage() {
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-4">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle size={16} className="text-orange-500" />
-            <p className="text-sm font-semibold text-orange-700">⚠️ Estoque Baixo</p>
+            <p className="text-sm font-semibold text-orange-700">Estoque Baixo</p>
           </div>
           <div className="space-y-1">
             {alertas.map(i => (
@@ -105,67 +197,30 @@ export default function EstoquePage() {
 
       {/* Tab: Insumos */}
       {tab === 'insumos' && (
-        <div className="space-y-3">
-          {insumos.map(insumo => {
-            const qtd = Number(insumo.quantidade)
-            const min = Number(insumo.estoque_minimo)
-            const baixo = min > 0 && qtd < min
-            return (
-              <div key={insumo.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${
-                baixo ? 'border-orange-200' : 'border-gray-100'
-              }`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-gray-900">{insumo.nome}</p>
-                      {baixo && (
-                        <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">
-                          ⚠️ BAIXO
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-2xl font-bold ${baixo ? 'text-orange-600' : 'text-gray-900'}`}>
-                        {insumo.unidade === 'folha' ? Number(qtd).toFixed(1) : Number(qtd).toFixed(0)}
-                      </span>
-                      <span className="text-sm text-gray-400">{insumo.unidade}{qtd !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="flex gap-3 mt-1.5 flex-wrap">
-                      {insumo.custo_unitario > 0 && (
-                        <span className="text-xs text-gray-500">
-                          Custo: {fmt(Number(insumo.custo_unitario))}/{insumo.unidade}
-                        </span>
-                      )}
-                      {editando === insumo.id ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">Mín:</span>
-                          <input
-                            type="number"
-                            value={editMin}
-                            onChange={e => setEditMin(e.target.value)}
-                            className="w-16 border border-gray-200 rounded px-1.5 py-0.5 text-xs"
-                            autoFocus
-                          />
-                          <button onClick={() => salvarMinimo(insumo.id)} className="text-xs text-green-600 font-semibold">✓</button>
-                          <button onClick={() => setEditando(null)} className="text-xs text-gray-400">✕</button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setEditando(insumo.id); setEditMin(String(insumo.estoque_minimo)) }}
-                          className="text-xs text-gray-400 underline"
-                        >
-                          Mín: {Number(insumo.estoque_minimo).toFixed(0)} {insumo.unidade}
-                        </button>
-                      )}
-                    </div>
-                    {insumo.observacoes && (
-                      <p className="text-xs text-gray-400 mt-1">{insumo.observacoes}</p>
-                    )}
-                  </div>
-                </div>
+        <div className="space-y-5">
+          {/* Componentes do Ímã */}
+          {insumoIma.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+                🧲 Componentes do Ímã
+              </p>
+              <div className="space-y-2">
+                {insumoIma.map(insumo => <InsumoCard key={insumo.id} insumo={insumo} />)}
               </div>
-            )
-          })}
+            </div>
+          )}
+
+          {/* Embalagem */}
+          {insumoEmbalagem.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
+                📦 Embalagem
+              </p>
+              <div className="space-y-2">
+                {insumoEmbalagem.map(insumo => <InsumoCard key={insumo.id} insumo={insumo} />)}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
