@@ -39,11 +39,14 @@ export default function NovoPedidoPage() {
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
   const [isMimo, setIsMimo] = useState(false)
   const [qtdEmbrulhos, setQtdEmbrulhos] = useState(1)
+  const [parceliaDesconto, setParceliaDesconto] = useState(false)
   // qtd_imas manual para encomenda personalizada (produto sem qtd_imas definido)
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
-  const descontoValor = parseFloat(desconto) || 0
+  const descontoParc = parceliaDesconto ? Math.round(subtotal * 0.10 * 100) / 100 : 0
+  const descontoManual = parseFloat(desconto) || 0
+  const descontoValor = descontoParc + descontoManual
   const freteVal = parseFloat(freteValor) || 0
   const total = Math.max(0, subtotal - descontoValor + freteVal)
 
@@ -94,15 +97,14 @@ export default function NovoPedidoPage() {
     setClienteSelecionado(c)
     setMostrarClientes(false)
     setBuscaCliente('')
-    // Herda comportamento do tipo de cliente
     if (c.tipo === 'mimo') {
       setIsMimo(true)
     } else {
       setIsMimo(false)
     }
-    // Parceria: deixa o campo de embrulhos visível (usuário define quantos)
     if (c.tipo !== 'parceria') {
       setQtdEmbrulhos(1)
+      setParceliaDesconto(false)
     }
   }
 
@@ -381,6 +383,67 @@ export default function NovoPedidoPage() {
         )}
       </div>
 
+      {/* Card Parceria — aparece só quando cliente é parceria */}
+      {clienteSelecionado?.tipo === 'parceria' && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+              <span className="text-base">🤝</span>
+            </div>
+            <p className="text-sm font-bold text-blue-800">Beneficios da Parceria</p>
+          </div>
+
+          {/* Embrulhos separados */}
+          <div className="bg-white rounded-xl p-3 mb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Embrulhos separados</p>
+                <p className="text-xs text-gray-400">Cada pacote: caixinha + cartao + papel</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setQtdEmbrulhos(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600"
+                >−</button>
+                <span className="w-6 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
+                <button
+                  onClick={() => setQtdEmbrulhos(q => q + 1)}
+                  className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-700"
+                >+</button>
+              </div>
+            </div>
+            {qtdEmbrulhos > 1 && (
+              <p className="text-xs text-blue-600 mt-2">
+                {qtdEmbrulhos} caixas + {qtdEmbrulhos} cartoes + {qtdEmbrulhos} papeis seda
+              </p>
+            )}
+          </div>
+
+          {/* Desconto 10% */}
+          <button
+            onClick={() => setParceliaDesconto(!parceliaDesconto)}
+            className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
+              parceliaDesconto ? 'bg-green-100 border border-green-300' : 'bg-white border border-gray-100'
+            }`}
+          >
+            <div className="text-left">
+              <p className={`text-sm font-medium ${parceliaDesconto ? 'text-green-800' : 'text-gray-700'}`}>
+                Desconto 10%
+              </p>
+              <p className="text-xs text-gray-400">
+                {parceliaDesconto && subtotal > 0
+                  ? `- R$ ${descontoParc.toFixed(2).replace('.', ',')}`
+                  : 'Aplicar desconto de parceria'}
+              </p>
+            </div>
+            <div className={`w-10 h-6 rounded-full transition-all ${parceliaDesconto ? 'bg-green-500' : 'bg-gray-200'}`}>
+              <div className="w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all"
+                style={{ marginLeft: parceliaDesconto ? '18px' : '2px' }} />
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Produtos */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -482,34 +545,6 @@ export default function NovoPedidoPage() {
           </div>
         )}
       </div>
-
-      {/* Embrulhos separados (parceria) */}
-      {qtdImasTotal > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Embrulhos separados</p>
-              <p className="text-xs text-gray-400">Parceria: cada pacote leva caixinha + cartao + papel</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setQtdEmbrulhos(q => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold"
-              >−</button>
-              <span className="w-8 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
-              <button
-                onClick={() => setQtdEmbrulhos(q => q + 1)}
-                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold"
-              >+</button>
-            </div>
-          </div>
-          {qtdEmbrulhos > 1 && (
-            <p className="text-xs text-blue-600 bg-blue-50 rounded-lg px-3 py-2">
-              {qtdEmbrulhos} embrulhos: {qtdEmbrulhos} caixas + {qtdEmbrulhos} cartoes + {qtdEmbrulhos} papeis seda
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Data e observações */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 space-y-4">
