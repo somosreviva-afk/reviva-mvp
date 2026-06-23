@@ -10,7 +10,10 @@ export function formatPercent(value: number): string {
 }
 
 export function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('pt-BR')
+  if (!dateStr) return ''
+  // Se já tem T (ISO timestamp), usa direto; senão adiciona T00:00:00
+  const d = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('pt-BR')
 }
 
 export function formatDatetime(dateStr: string): string {
