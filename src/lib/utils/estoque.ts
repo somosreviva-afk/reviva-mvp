@@ -1,5 +1,6 @@
 export const INSUMOS_PADRAO = [
-  // 4 componentes do ímã — rastreados separadamente, custo compartilhado (R$/conjunto)
+  // 4 componentes do ímã — cada um com seu próprio custo por peça
+  // ima_custo (usado no cálculo de pedidos) = soma dos 4 custo_unitario
   { tipo: 'ima_magnetico', nome: 'Ímã Magnético', unidade: 'unidade', estoque_minimo: 50 },
   { tipo: 'placa_plastico', nome: 'Placa de Plástico', unidade: 'unidade', estoque_minimo: 50 },
   { tipo: 'placa_metal', nome: 'Placa de Metal', unidade: 'unidade', estoque_minimo: 50 },
@@ -13,11 +14,11 @@ export const INSUMOS_PADRAO = [
   { tipo: 'folha_impressao', nome: 'Folha de Impressão', unidade: 'folha', estoque_minimo: 10 },
 ]
 
-// Os 4 tipos do ímã são sempre comprados juntos como um conjunto
 export const TIPOS_IMA = ['ima_magnetico', 'placa_plastico', 'placa_metal', 'plastico_protecao']
 
 // Tipo → campo de custo em configuracoes_materiais
-// Para ímãs: custo_unitario no lote = custo por conjunto de 4 peças (= ima_custo)
+// Para os 4 componentes do ímã: custo_unitario = custo por PEÇA individual
+// ima_custo = soma dos 4 custo_unitario (calculado via atualizarImaCusto)
 export const TIPO_PARA_CONFIG: Record<string, string> = {
   ima_magnetico: 'ima_custo',
   placa_plastico: 'ima_custo',
@@ -34,7 +35,6 @@ export const TIPO_PARA_CONFIG: Record<string, string> = {
 export function calcularConsumo(qtdImas: number, fotosPerFolha: number = 12): Record<string, number> {
   if (qtdImas <= 0) return {}
   return {
-    // 1 de cada componente por ímã produzido
     ima_magnetico: qtdImas,
     placa_plastico: qtdImas,
     placa_metal: qtdImas,
@@ -64,6 +64,31 @@ export async function garantirInsumos(supabase: any, empresaId: string) {
   }
 }
 
+// ima_custo = soma dos custo_unitario dos 4 componentes
+// Chamado sempre que um componente do ímã muda de preço
+export async function atualizarImaCusto(
+  supabase: any,
+  empresaId: string,
+  insumoIdAtualizado: string,
+  novoCusto: number
+) {
+  const { data: comps } = await supabase
+    .from('insumos')
+    .select('id, custo_unitario')
+    .eq('empresa_id', empresaId)
+    .in('tipo', TIPOS_IMA)
+
+  const total = (comps || []).reduce((sum: number, c: any) => {
+    const custo = c.id === insumoIdAtualizado ? novoCusto : Number(c.custo_unitario || 0)
+    return sum + custo
+  }, 0)
+
+  await supabase
+    .from('configuracoes_materiais')
+    .update({ ima_custo: Number(total.toFixed(4)) })
+    .eq('empresa_id', empresaId)
+}
+
 // Quando o lote ativo esgota, ativa o próximo pendente e atualiza o custo automaticamente
 async function ativarProximoLote(
   supabase: any,
@@ -83,22 +108,22 @@ async function ativarProximoLote(
 
   if (!proximo) return
 
-  // Ativa o próximo lote
   await supabase
     .from('lotes_estoque')
     .update({ status: 'ativo', updated_at: new Date().toISOString() })
     .eq('id', proximo.id)
 
   if (proximo.custo_unitario != null) {
-    // Atualiza custo_unitario no insumo
     await supabase
       .from('insumos')
       .update({ custo_unitario: proximo.custo_unitario, updated_at: new Date().toISOString() })
       .eq('id', insumoId)
 
-    // Atualiza custo em configuracoes_materiais
     const campoConfig = TIPO_PARA_CONFIG[insumoTipo]
-    if (campoConfig) {
+    if (campoConfig === 'ima_custo') {
+      // Para componentes do ímã: recalcula ima_custo como soma dos 4
+      await atualizarImaCusto(supabase, empresaId, insumoId, Number(proximo.custo_unitario))
+    } else if (campoConfig) {
       await supabase
         .from('configuracoes_materiais')
         .update({ [campoConfig]: Number(proximo.custo_unitario) })
@@ -126,14 +151,13 @@ export async function descontarEstoque(
   const insumoMap: Record<string, any> = {}
   insumos.forEach((i: any) => { insumoMap[i.tipo] = i })
 
-  // Busca lotes ativos de todos os insumos
   const { data: lotesAtivos } = await supabase
     .from('lotes_estoque')
     .select('*')
     .eq('empresa_id', empresaId)
     .eq('status', 'ativo')
 
-  const loteMap: Record<string, any> = {} // insumo_id → lote ativo
+  const loteMap: Record<string, any> = {}
   ;(lotesAtivos || []).forEach((l: any) => { loteMap[l.insumo_id] = l })
 
   const consumo = calcularConsumo(qtdImas, fotosPerFolha)
@@ -154,26 +178,22 @@ export async function descontarEstoque(
       data: hoje,
     })
 
-    // Atualiza quantidade total do insumo
     const novaQtd = Math.max(0, Number(insumo.quantidade) - qtd)
     await supabase
       .from('insumos')
       .update({ quantidade: Number(novaQtd.toFixed(3)), updated_at: new Date().toISOString() })
       .eq('id', insumo.id)
 
-    // Gerencia lote ativo (FIFO)
     const lote = loteMap[insumo.id]
     if (lote) {
       const novaQtdLote = Number(lote.quantidade_restante) - qtd
       if (novaQtdLote <= 0) {
-        // Lote esgotado — ativa o próximo
         await supabase
           .from('lotes_estoque')
           .update({ status: 'esgotado', quantidade_restante: 0, updated_at: new Date().toISOString() })
           .eq('id', lote.id)
         await ativarProximoLote(supabase, empresaId, insumo.id, insumo.tipo)
       } else {
-        // Atualiza quantidade restante no lote
         await supabase
           .from('lotes_estoque')
           .update({ quantidade_restante: Number(novaQtdLote.toFixed(3)), updated_at: new Date().toISOString() })
