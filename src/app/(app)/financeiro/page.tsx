@@ -65,6 +65,8 @@ export default async function FinanceiroPage() {
   // Saldo = o que entrou no bolso - o que saiu do bolso
   const saldoCaixa = totalRecebido - totalCompras - totalSaidasManuais + totalEntradasManuais
 
+  const custoproducao = pedidos.reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
+
   return (
     <div className="p-4 pb-24">
       <div className="flex items-center justify-between pt-4 mb-5">
@@ -79,19 +81,19 @@ export default async function FinanceiroPage() {
         </Link>
       </div>
 
-      {/* Lucro Real — número mais importante */}
-      <div className={`rounded-2xl p-5 mb-4 ${lucroReal >= 0 ? 'bg-green-600' : 'bg-red-500'}`}>
-        <p className="text-sm text-green-200 mb-1">Lucro Real do Mês</p>
-        <p className="text-3xl font-bold text-white">{formatCurrency(lucroReal)}</p>
+      {/* Dinheiro em Caixa — número principal */}
+      <div className={`rounded-2xl p-5 mb-4 ${saldoCaixa >= 0 ? 'bg-green-600' : 'bg-red-500'}`}>
+        <p className="text-sm text-green-200 mb-1">Dinheiro em Caixa</p>
+        <p className="text-3xl font-bold text-white">{formatCurrency(saldoCaixa)}</p>
         <p className="text-xs text-green-200 mt-1">
-          {formatCurrency(totalRecebido)} recebido − {formatCurrency(pedidos.reduce((s,p) => s + Number(p.custo_total_pedido||0),0))} em materiais dos pedidos
+          {formatCurrency(totalRecebido)} recebido − {formatCurrency(totalCompras + totalSaidasManuais - totalEntradasManuais)} em saídas
         </p>
       </div>
 
-      {/* Movimentações do mês */}
+      {/* Breakdown do mês */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
 
-        {/* Recebido */}
+        {/* Recebido de vendas */}
         <div className="p-4 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -100,9 +102,9 @@ export default async function FinanceiroPage() {
               </div>
               <span className="text-sm font-semibold text-gray-700">Recebido de vendas</span>
             </div>
-            <span className="text-base font-bold text-green-700">{formatCurrency(totalRecebido)}</span>
+            <span className="text-base font-bold text-green-700">+{formatCurrency(totalRecebido)}</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {totalPix > 0 && (
               <span className="text-xs bg-green-50 text-green-700 px-2.5 py-1 rounded-full font-medium">
                 Pix {formatCurrency(totalPix)}
@@ -124,21 +126,37 @@ export default async function FinanceiroPage() {
           </div>
         </div>
 
-        {/* Compras de material (saída do caixa) */}
-        {totalCompras > 0 && (
-          <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <TrendingDown size={14} className="text-orange-600" />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Compras de material</span>
+        {/* Compras de material */}
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
+                <TrendingDown size={14} className="text-orange-600" />
               </div>
-              <span className="text-base font-bold text-orange-600">−{formatCurrency(totalCompras)}</span>
+              <span className="text-sm font-semibold text-gray-700">Compras de material</span>
             </div>
-            <p className="text-xs text-gray-400 ml-9">saiu do caixa para comprar insumos</p>
+            <span className="text-base font-bold text-orange-600">
+              {totalCompras > 0 ? `−${formatCurrency(totalCompras)}` : formatCurrency(0)}
+            </span>
           </div>
-        )}
+          <p className="text-xs text-gray-400 ml-9">dinheiro gasto comprando insumos</p>
+        </div>
+
+        {/* Custo de produção */}
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                <TrendingDown size={14} className="text-amber-600" />
+              </div>
+              <span className="text-sm font-semibold text-gray-700">Custo de produção</span>
+            </div>
+            <span className="text-base font-bold text-amber-600">
+              {custoproducao > 0 ? `−${formatCurrency(custoproducao)}` : formatCurrency(0)}
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 ml-9">materiais consumidos nos pedidos ({pedidos.length} pedidos)</p>
+        </div>
 
         {/* Saídas manuais */}
         {totalSaidasManuais > 0 && (
@@ -170,15 +188,15 @@ export default async function FinanceiroPage() {
           </div>
         )}
 
-        {/* Saldo */}
-        <div className={`p-4 ${saldoCaixa >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+        {/* Lucro Real — linha final informativa */}
+        <div className="p-4 bg-gray-50">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-bold text-gray-800">Dinheiro em caixa</p>
-              <p className="text-xs text-gray-500 mt-0.5">o que sobrou no seu bolso este mês</p>
+              <p className="text-sm font-semibold text-gray-700">Lucro Real</p>
+              <p className="text-xs text-gray-400 mt-0.5">vendas − custo de produção</p>
             </div>
-            <p className={`text-xl font-bold ${saldoCaixa >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-              {formatCurrency(saldoCaixa)}
+            <p className={`text-base font-bold ${lucroReal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(lucroReal)}
             </p>
           </div>
         </div>
