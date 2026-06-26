@@ -62,22 +62,32 @@ export default function EnviarFotosPage({ params }: { params: { id: string } }) 
         idx === i ? { ...f, status: 'enviando' } : f
       ))
 
-      const ext = foto.file.name.split('.').pop() || 'jpg'
-      const nomeArquivo = `pedidos/${pedidoId}/${Date.now()}_${i}.${ext}`
+      try {
+        // 1. Pede URL assinada ao servidor
+        const res = await fetch('/api/fotos/signed-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedidoId, fileName: foto.file.name }),
+        })
+        const { signedUrl, token, path, error: urlError } = await res.json()
 
-      const { error } = await supabase.storage
-        .from('fotos-clientes')
-        .upload(nomeArquivo, foto.file, { upsert: true })
+        if (urlError || !token) throw new Error(urlError || 'Erro ao gerar URL')
 
-      if (error) {
+        // 2. Faz upload direto para o Storage usando a URL assinada
+        const { error } = await supabase.storage
+          .from('fotos-clientes')
+          .uploadToSignedUrl(path, token, foto.file)
+
+        if (error) throw new Error(error.message)
+
+        setFotos(prev => prev.map((f, idx) =>
+          idx === i ? { ...f, status: 'ok', progresso: 100 } : f
+        ))
+      } catch {
         setFotos(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'erro' } : f
         ))
         todasOk = false
-      } else {
-        setFotos(prev => prev.map((f, idx) =>
-          idx === i ? { ...f, status: 'ok', progresso: 100 } : f
-        ))
       }
     }
 

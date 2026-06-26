@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
-  const isPublicPage = isLoginPage || pathname === '/' || pathname.startsWith('/enviar-fotos') || pathname.startsWith('/api/pedido/info')
+  const isPublicPage = isLoginPage || pathname === '/' || pathname.startsWith('/enviar-fotos') || pathname.startsWith('/api/pedido/info') || pathname.startsWith('/api/fotos')
 
   if (!user && !isPublicPage) {
     return NextResponse.redirect(new URL('/login', request.url))
