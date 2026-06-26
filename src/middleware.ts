@@ -26,23 +26,11 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
   const isPublicPage = isLoginPage || pathname === '/'
+    || pathname === '/auth/callback'                  // callback do magic link
     || pathname.startsWith('/enviar-fotos')
     || pathname.startsWith('/api/pedido/info')
     || pathname === '/api/fotos/signed-url'          // só upload de fotos é público
     || pathname.startsWith('/api/webhooks/')          // webhooks externos
     || pathname.startsWith('/api/nuvemshop/lgpd')    // LGPD Nuvemshop
 
-  if (!user && !isPublicPage) {
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
-
-  if (user && isLoginPage) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
-
-  return supabaseResponse
-}
-
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)'],
-}
+  if (!
