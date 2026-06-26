@@ -69,24 +69,26 @@ export default function EnviarFotosPage({ params }: { params: { id: string } }) 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pedidoId, fileName: foto.file.name }),
         })
-        const { signedUrl, token, path, error: urlError } = await res.json()
+        const json = await res.json()
 
-        if (urlError || !token) throw new Error(urlError || 'Erro ao gerar URL')
+        if (json.error || !json.token) throw new Error(json.error || 'Erro ao gerar URL de upload')
 
         // 2. Faz upload direto para o Storage usando a URL assinada
-        const { error } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('fotos-clientes')
-          .uploadToSignedUrl(path, token, foto.file)
+          .uploadToSignedUrl(json.path, json.token, foto.file)
 
-        if (error) throw new Error(error.message)
+        if (uploadError) throw new Error(uploadError.message)
 
         setFotos(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'ok', progresso: 100 } : f
         ))
-      } catch {
+      } catch (e: any) {
+        console.error('Erro upload foto:', e?.message)
         setFotos(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'erro' } : f
         ))
+        setErro(e?.message || 'Erro desconhecido')
         todasOk = false
       }
     }
