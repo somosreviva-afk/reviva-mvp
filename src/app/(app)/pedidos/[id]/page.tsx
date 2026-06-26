@@ -140,26 +140,20 @@ export default function PedidoDetailPage() {
   }
 
   function enviarSolicitacaoFotos() {
-    if (!pedido?.clientes?.whatsapp || !pedido?.link_pasta_drive) return
+    if (!pedido?.clientes?.whatsapp) return
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
-    const link = pedido.link_pasta_drive
+    const linkUpload = `https://reviva-mvp.vercel.app/enviar-fotos/${pedido.id}`
     const mensagem = [
-      `Ola, ${nome}!`,
+      `Ola, ${nome}! 💚`,
       ``,
-      `Recebemos seu pedido e sua pasta exclusiva ja foi criada.`,
+      `Recebemos seu pedido e ja estamos prontos para receber suas fotos!`,
       ``,
-      `Para manter a qualidade original das fotos, envie diretamente pelo link abaixo:`,
-      link,
+      `Acesse o link abaixo, escolha as fotos do seu celular e envie diretamente:`,
+      `👉 ${linkUpload}`,
       ``,
-      `*Como enviar pelo celular:*`,
-      `1. Abra o link acima`,
-      `2. Toque no botao + ou Fazer upload`,
-      `3. Escolha as fotos da sua galeria`,
-      `4. Aguarde o upload concluir`,
-      ``,
-      `Assim que recebermos as fotos iniciamos a producao!`,
-      `Qualquer duvida estou a disposicao.`,
+      `E so isso! Assim que recebermos as fotos iniciamos a producao dos seus imas.`,
+      `Qualquer duvida estou a disposicao 😊`,
     ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
