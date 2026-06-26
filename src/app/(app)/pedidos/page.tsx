@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS } from '@/lib/utils/formatters'
 import { Plus, ShoppingBag, ChevronRight, Pencil, Check, X } from 'lucide-react'
@@ -31,11 +32,16 @@ function diasDesde(dateStr: string): number {
 }
 
 function PedidoCard({ pedido, atualizando, editandoObs, obsTemp, onAvancar, onIniciarObs, onSalvarObs, onCancelarObs, onChangeObs }: any) {
+  const router = useRouter()
   const temTransp = !!pedido.transportadora
   const proximo = proximoStatus(pedido.status, temTransp)
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <Link href={`/pedidos/${pedido.id}`} className="flex items-center justify-between p-4">
+    <div
+      className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden cursor-pointer"
+      onClick={() => router.push(`/pedidos/${pedido.id}`)}
+    >
+      <div className="flex items-center justify-between p-4">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{pedido.clientes?.nome}</p>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -56,10 +62,11 @@ function PedidoCard({ pedido, atualizando, editandoObs, obsTemp, onAvancar, onIn
           </p>
           <ChevronRight size={16} className="text-gray-300" />
         </div>
-      </Link>
-      <div className="px-4 pb-2">
+      </div>
+
+      <div className="px-4 pb-2" onClick={e => e.stopPropagation()}>
         {editandoObs === pedido.id ? (
-          <div className="flex gap-2 items-center" onClick={e => { e.preventDefault(); e.stopPropagation() }}>
+          <div className="flex gap-2 items-center">
             <input
               autoFocus
               value={obsTemp}
@@ -72,15 +79,19 @@ function PedidoCard({ pedido, atualizando, editandoObs, obsTemp, onAvancar, onIn
             <button onClick={onCancelarObs} className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center"><X size={13} className="text-gray-500" /></button>
           </div>
         ) : (
-          <button onClick={(e) => onIniciarObs(pedido, e)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 py-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); onIniciarObs(pedido, e) }}
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 py-1"
+          >
             <Pencil size={11} />
             {pedido.observacoes ? <span className="text-gray-600 italic">{pedido.observacoes}</span> : 'Adicionar observacao...'}
           </button>
         )}
       </div>
+
       {proximo && (
         <button
-          onClick={() => onAvancar(pedido)}
+          onClick={(e) => { e.stopPropagation(); onAvancar(pedido) }}
           disabled={atualizando === pedido.id}
           className="w-full py-2.5 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50"
         >
@@ -91,13 +102,72 @@ function PedidoCard({ pedido, atualizando, editandoObs, obsTemp, onAvancar, onIn
   )
 }
 
+type TabDia = 'hoje' | '1dia' | '2dias'
+
+function SecaoComAbas({ status, lista, tabAtiva, onTab, cardProps }: {
+  status: string
+  lista: any[]
+  tabAtiva: TabDia
+  onTab: (t: TabDia) => void
+  cardProps: any
+}) {
+  const grupos = {
+    hoje: lista.filter(p => diasDesde(p.created_at) === 0),
+    '1dia': lista.filter(p => diasDesde(p.created_at) === 1),
+    '2dias': lista.filter(p => diasDesde(p.created_at) >= 2),
+  }
+
+  const abas = [
+    { key: 'hoje' as TabDia, label: 'Hoje', cor: 'text-green-700 bg-green-50 border-green-200', corAtiva: 'bg-green-600 text-white border-green-600', count: grupos.hoje.length },
+    { key: '1dia' as TabDia, label: '1 dia', cor: 'text-yellow-700 bg-yellow-50 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500', count: grupos['1dia'].length },
+    { key: '2dias' as TabDia, label: '2+ dias', cor: 'text-red-700 bg-red-50 border-red-200', corAtiva: 'bg-red-500 text-white border-red-500', count: grupos['2dias'].length },
+  ]
+
+  const pedidosAba = grupos[tabAtiva]
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[status]}`}>
+          {STATUS_LABELS[status]}
+        </span>
+        <span className="text-xs text-gray-400">{lista.length}</span>
+      </div>
+
+      <div className="flex gap-2 mb-3">
+        {abas.map(aba => (
+          <button
+            key={aba.key}
+            onClick={() => onTab(aba.key)}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${tabAtiva === aba.key ? aba.corAtiva : aba.cor}`}
+          >
+            {aba.label}
+            {aba.count > 0 && <span className="ml-1 opacity-75">({aba.count})</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-2">
+        {pedidosAba.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Nenhum pedido nessa faixa</p>
+        ) : (
+          pedidosAba.map((pedido: any) => (
+            <PedidoCard key={pedido.id} pedido={pedido} {...cardProps} />
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PedidosPage() {
   const [pedidos, setPedidos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editandoObs, setEditandoObs] = useState<string | null>(null)
   const [obsTemp, setObsTemp] = useState('')
   const [atualizando, setAtualizando] = useState<string | null>(null)
-  const [tabProducao, setTabProducao] = useState<'hoje' | '1dia' | '2dias'>('hoje')
+  const [tabAguardando, setTabAguardando] = useState<TabDia>('hoje')
+  const [tabProducao, setTabProducao] = useState<TabDia>('hoje')
 
   async function carregar() {
     const supabase = createClient()
@@ -188,64 +258,32 @@ export default function PedidosPage() {
             const lista = pedidosPorStatus[status] || []
             if (lista.length === 0) return null
 
-            // Em Produção: abas por dias
-            if (status === 'producao') {
-              const grupos = {
-                hoje: lista.filter(p => diasDesde(p.created_at) === 0),
-                '1dia': lista.filter(p => diasDesde(p.created_at) === 1),
-                '2dias': lista.filter(p => diasDesde(p.created_at) >= 2),
-              }
-
-              const abas = [
-                { key: 'hoje' as const, label: 'Hoje', cor: 'text-green-700 bg-green-100 border-green-300', corAtiva: 'bg-green-600 text-white border-green-600', count: grupos.hoje.length },
-                { key: '1dia' as const, label: '1 dia', cor: 'text-yellow-700 bg-yellow-50 border-yellow-200', corAtiva: 'bg-yellow-500 text-white border-yellow-500', count: grupos['1dia'].length },
-                { key: '2dias' as const, label: '2+ dias', cor: 'text-red-700 bg-red-50 border-red-200', corAtiva: 'bg-red-500 text-white border-red-500', count: grupos['2dias'].length },
-              ]
-
-              const pedidosAba = grupos[tabProducao]
-
+            if (status === 'aguardando_fotos') {
               return (
-                <div key={status}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[status]}`}>
-                      {STATUS_LABELS[status]}
-                    </span>
-                    <span className="text-xs text-gray-400">{lista.length}</span>
-                  </div>
-
-                  {/* Abas */}
-                  <div className="flex gap-2 mb-3">
-                    {abas.map(aba => (
-                      <button
-                        key={aba.key}
-                        onClick={() => setTabProducao(aba.key)}
-                        className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${tabProducao === aba.key ? aba.corAtiva : aba.cor}`}
-                      >
-                        {aba.label}
-                        {aba.count > 0 && (
-                          <span className={`ml-1 ${tabProducao === aba.key ? 'opacity-80' : 'opacity-60'}`}>
-                            ({aba.count})
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Pedidos da aba selecionada */}
-                  <div className="space-y-2">
-                    {pedidosAba.length === 0 ? (
-                      <p className="text-sm text-gray-400 text-center py-4">Nenhum pedido nessa faixa</p>
-                    ) : (
-                      pedidosAba.map((pedido: any) => (
-                        <PedidoCard key={pedido.id} pedido={pedido} {...cardProps} />
-                      ))
-                    )}
-                  </div>
-                </div>
+                <SecaoComAbas
+                  key={status}
+                  status={status}
+                  lista={lista}
+                  tabAtiva={tabAguardando}
+                  onTab={setTabAguardando}
+                  cardProps={cardProps}
+                />
               )
             }
 
-            // Outros status
+            if (status === 'producao') {
+              return (
+                <SecaoComAbas
+                  key={status}
+                  status={status}
+                  lista={lista}
+                  tabAtiva={tabProducao}
+                  onTab={setTabProducao}
+                  cardProps={cardProps}
+                />
+              )
+            }
+
             return (
               <div key={status}>
                 <div className="flex items-center gap-2 mb-2">
