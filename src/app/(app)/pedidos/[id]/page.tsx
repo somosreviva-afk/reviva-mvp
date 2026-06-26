@@ -163,18 +163,26 @@ export default function PedidoDetailPage() {
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const linkUpload = `https://reviva-mvp.vercel.app/enviar-fotos/${pedido.id}`
+    const e = {
+      folha:   String.fromCodePoint(0x1F33F), // 🌿
+      check:   String.fromCodePoint(0x2705),  // ✅
+      camera:  String.fromCodePoint(0x1F4F8), // 📸
+      seta:    String.fromCodePoint(0x1F449), // 👉
+      coracao: String.fromCodePoint(0x1F49A), // 💚
+      ima:     String.fromCodePoint(0x1F9F2), // 🧲
+    }
     const mensagem = [
-      `Olá, ${nome}! 🌿`,
+      `Olá, ${nome}! ${e.folha}`,
       ``,
-      `Seu pedido foi recebido com sucesso! ✅`,
+      `Seu pedido foi recebido com sucesso! ${e.check}`,
       ``,
-      `Para darmos início à produção, precisamos das suas fotos 📸`,
+      `Para darmos início à produção, precisamos das suas fotos ${e.camera}`,
       `Acesse o link abaixo e envie diretamente pelo celular:`,
       ``,
-      `👉 ${linkUpload}`,
+      `${e.seta} ${linkUpload}`,
       ``,
       `Qualquer dúvida estou à disposição!`,
-      `Com carinho, Reviva 💚🧲`,
+      `Com carinho, Reviva ${e.coracao}${e.ima}`,
     ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
