@@ -10,6 +10,18 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+
+    // Valida que o pedido existe — impede upload para pedidos falsos
+    const { data: pedido } = await supabase
+      .from('pedidos')
+      .select('id')
+      .eq('id', pedidoId)
+      .single()
+
+    if (!pedido) {
+      return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
+    }
+
     const ext = (fileName.split('.').pop() || 'jpg').toLowerCase()
     const path = `pedidos/${pedidoId}/${Date.now()}.${ext}`
 

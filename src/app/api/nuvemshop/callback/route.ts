@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
         },
         body: JSON.stringify({
           event: 'order/paid',
-          url: 'https://reviva-mvp.vercel.app/api/webhooks/nuvemshop',
+          url: `https://reviva-mvp.vercel.app/api/webhooks/nuvemshop${process.env.NUVEMSHOP_WEBHOOK_SECRET ? `?secret=${process.env.NUVEMSHOP_WEBHOOK_SECRET}` : ''}`,
         }),
       })
     }

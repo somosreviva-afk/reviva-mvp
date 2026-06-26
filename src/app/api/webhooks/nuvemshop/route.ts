@@ -13,6 +13,17 @@ function mapearFormaPagamento(method: string): 'pix' | 'link' | 'cartao' {
 
 export async function POST(req: NextRequest) {
   try {
+    // Valida secret token — impede pedidos falsos
+    const secret = process.env.NUVEMSHOP_WEBHOOK_SECRET
+    if (secret) {
+      const tokenRecebido = req.nextUrl.searchParams.get('secret')
+        || req.headers.get('x-webhook-secret')
+      if (tokenRecebido !== secret) {
+        console.warn('Webhook rejeitado: secret inválido')
+        return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      }
+    }
+
     const body = await req.json()
 
     // Nuvemshop pode mandar objeto ou array

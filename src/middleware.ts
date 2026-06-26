@@ -25,7 +25,12 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
   const isLoginPage = pathname === '/login'
-  const isPublicPage = isLoginPage || pathname === '/' || pathname.startsWith('/enviar-fotos') || pathname.startsWith('/api/pedido/info') || pathname.startsWith('/api/fotos')
+  const isPublicPage = isLoginPage || pathname === '/'
+    || pathname.startsWith('/enviar-fotos')
+    || pathname.startsWith('/api/pedido/info')
+    || pathname === '/api/fotos/signed-url'          // só upload de fotos é público
+    || pathname.startsWith('/api/webhooks/')          // webhooks externos
+    || pathname.startsWith('/api/nuvemshop/lgpd')    // LGPD Nuvemshop
 
   if (!user && !isPublicPage) {
     return NextResponse.redirect(new URL('/login', request.url))
