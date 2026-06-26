@@ -23,6 +23,14 @@ const LABEL_ACAO: Record<string, string> = {
   entregue: 'Entregue',
 }
 
+function diasDesde(dateStr: string): number {
+  const criado = new Date(dateStr)
+  const hoje = new Date()
+  criado.setHours(0, 0, 0, 0)
+  hoje.setHours(0, 0, 0, 0)
+  return Math.floor((hoje.getTime() - criado.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 export default function PedidosPage() {
   const [pedidos, setPedidos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +115,87 @@ export default function PedidosPage() {
           {STATUS_ORDER.map(status => {
             const lista = pedidosPorStatus[status] || []
             if (lista.length === 0) return null
+
+            // Agrupa "Em Produção" por dias
+            if (status === 'producao') {
+              const grupos = [
+                { label: 'Hoje', cor: 'text-green-600 bg-green-50', pedidos: lista.filter(p => diasDesde(p.created_at) === 0) },
+                { label: '1 dia', cor: 'text-yellow-600 bg-yellow-50', pedidos: lista.filter(p => diasDesde(p.created_at) === 1) },
+                { label: '2+ dias', cor: 'text-red-600 bg-red-50', pedidos: lista.filter(p => diasDesde(p.created_at) >= 2) },
+              ].filter(g => g.pedidos.length > 0)
+
+              return (
+                <div key={status}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[status]}`}>
+                      {STATUS_LABELS[status]}
+                    </span>
+                    <span className="text-xs text-gray-400">{lista.length}</span>
+                  </div>
+                  <div className="space-y-4">
+                    {grupos.map(grupo => (
+                      <div key={grupo.label}>
+                        <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full mb-2 ${grupo.cor}`}>
+                          {grupo.label} · {grupo.pedidos.length}
+                        </div>
+                        <div className="space-y-2">
+                          {grupo.pedidos.map((pedido: any) => {
+                            const temTransp = !!pedido.transportadora
+                            const proximo = proximoStatus(pedido.status, temTransp)
+                            return (
+                              <div key={pedido.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                <Link href={`/pedidos/${pedido.id}`} className="flex items-center justify-between p-4">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold text-gray-900 truncate">{pedido.clientes?.nome}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      #{pedido.numero}
+                                      {pedido.data_entrega && ` · ${formatDate(pedido.data_entrega)}`}
+                                      {pedido.origem === 'nuvemshop' ? (
+                                        <span className="ml-1 font-semibold text-purple-500">· Nuvemshop</span>
+                                      ) : pedido.origem === 'whatsapp_correio' || temTransp ? (
+                                        <span className="ml-1 text-orange-500">· WhatsApp Correio</span>
+                                      ) : (
+                                        <span className="ml-1 text-blue-500">· WhatsApp Local</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-base font-bold text-gray-900">
+                                      {pedido.tipo === 'mimo' ? <span className="text-pink-500 text-sm">Mimo</span> : formatCurrency(pedido.valor_total)}
+                                    </p>
+                                    <ChevronRight size={16} className="text-gray-300" />
+                                  </div>
+                                </Link>
+                                <div className="px-4 pb-2">
+                                  {editandoObs === pedido.id ? (
+                                    <div className="flex gap-2 items-center" onClick={e => { e.preventDefault(); e.stopPropagation() }}>
+                                      <input autoFocus value={obsTemp} onChange={e => setObsTemp(e.target.value)} className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500" placeholder="Observação..." onKeyDown={e => { if (e.key === 'Enter') salvarObs(pedido.id); if (e.key === 'Escape') setEditandoObs(null) }} />
+                                      <button onClick={() => salvarObs(pedido.id)} className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center"><Check size={13} className="text-green-700" /></button>
+                                      <button onClick={() => setEditandoObs(null)} className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center"><X size={13} className="text-gray-500" /></button>
+                                    </div>
+                                  ) : (
+                                    <button onClick={(e) => iniciarEditObs(pedido, e)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 py-1">
+                                      <Pencil size={11} />
+                                      {pedido.observacoes ? <span className="text-gray-600 italic">{pedido.observacoes}</span> : 'Adicionar observacao...'}
+                                    </button>
+                                  )}
+                                </div>
+                                {proximo && (
+                                  <button onClick={() => avancarStatus(pedido)} disabled={atualizando === pedido.id} className="w-full py-2.5 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-50">
+                                    {atualizando === pedido.id ? 'Atualizando...' : LABEL_ACAO[proximo] || STATUS_LABELS[proximo]}
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div key={status}>
                 <div className="flex items-center gap-2 mb-2">
