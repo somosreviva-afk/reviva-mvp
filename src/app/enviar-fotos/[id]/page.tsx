@@ -96,6 +96,12 @@ export default function EnviarFotosPage() {
 
     setEnviando(false)
     if (todasOk) {
+      // Copia fotos para o Google Drive do pedido (em background, sem bloquear)
+      fetch('/api/fotos/sync-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId }),
+      }).catch(() => {})
       setConcluido(true)
     }
   }
