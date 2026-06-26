@@ -129,8 +129,12 @@ export default function PedidosPage() {
                             <p className="text-xs text-gray-500 mt-0.5">
                               #{pedido.numero}
                               {pedido.data_entrega && ` · ${formatDate(pedido.data_entrega)}`}
-                              {!temTransp && !isEntregue && (
-                                <span className="ml-1 text-blue-500">· Local</span>
+                              {pedido.origem === 'nuvemshop' ? (
+                                <span className="ml-1 font-semibold text-purple-500">· Nuvemshop</span>
+                              ) : pedido.origem === 'whatsapp_correio' || temTransp ? (
+                                <span className="ml-1 text-orange-500">· WhatsApp Correio</span>
+                              ) : (
+                                <span className="ml-1 text-blue-500">· WhatsApp Local</span>
                               )}
                             </p>
                           </div>

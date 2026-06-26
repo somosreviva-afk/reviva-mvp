@@ -37,6 +37,7 @@ export default function NovoPedidoPage() {
   const [transportadora, setTransportadora] = useState('')
   const [prazoEntrega, setPrazoEntrega] = useState('')
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
+  const [origem, setOrigem] = useState<'whatsapp_local' | 'whatsapp_correio'>('whatsapp_local')
   const [isMimo, setIsMimo] = useState(false)
   const [qtdEmbrulhos, setQtdEmbrulhos] = useState(1)
   const [parceliaDesconto, setParceliaDesconto] = useState(false)
@@ -153,6 +154,7 @@ export default function NovoPedidoPage() {
       empresa_id: usuario!.empresa_id,
       cliente_id: clienteSelecionado.id,
       status,
+      origem,
       tipo: isMimo ? 'mimo' : 'venda',
       data_entrega: dataEntrega || null,
       observacoes: observacoes || null,
@@ -272,6 +274,29 @@ export default function NovoPedidoPage() {
           <div className={`w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all ${isMimo ? 'ml-6.5' : 'ml-0.5'}`} style={{ marginLeft: isMimo ? '26px' : '2px' }} />
         </div>
       </button>
+
+      {/* Origem do pedido */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Origem do pedido</label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setOrigem('whatsapp_local')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+              origem === 'whatsapp_local' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            WhatsApp · Local
+          </button>
+          <button
+            onClick={() => setOrigem('whatsapp_correio')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
+              origem === 'whatsapp_correio' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            WhatsApp · Correio
+          </button>
+        </div>
+      </div>
 
       {/* Status */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">

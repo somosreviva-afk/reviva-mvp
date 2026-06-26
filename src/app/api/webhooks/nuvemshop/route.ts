@@ -162,6 +162,7 @@ export async function POST(req: NextRequest) {
         empresa_id: empresaId,
         cliente_id: clienteId,
         nuvemshop_order_id: numeroPedidoNuvem,
+        origem: 'nuvemshop',
         status: 'aguardando_fotos',
         tipo: 'venda',
         subtotal,
