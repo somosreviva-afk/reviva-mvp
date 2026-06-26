@@ -6,9 +6,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
-  const userId = searchParams.get('user_id') // store ID da Nuvemshop
+  const userId = searchParams.get('user_id') // store ID (pode vir aqui ou no token)
 
-  if (!code || !userId) {
+  if (!code) {
     return NextResponse.redirect(
       new URL('/configuracoes?nuvemshop=erro', req.url)
     )
