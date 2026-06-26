@@ -177,13 +177,7 @@ export default function PedidoDetailPage() {
       `Qualquer duvida estou a disposicao!`,
       `Com carinho, Reviva`,
     ].join('\n')
-    // Copia para área de transferência e abre WhatsApp
-    try {
-      await navigator.clipboard.writeText(mensagem)
-      setMsgCopiada(true)
-      setTimeout(() => setMsgCopiada(false), 3000)
-    } catch {}
-    window.open(`https://wa.me/55${numero}`, '_blank')
+    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
   if (loading) return (
