@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { google } from 'googleapis'
 
+export const maxDuration = 60 // segundos — evita timeout no Vercel
+
 function criarAuthDrive() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
   const key = process.env.GOOGLE_PRIVATE_KEY

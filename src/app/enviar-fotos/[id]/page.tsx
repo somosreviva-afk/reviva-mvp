@@ -94,16 +94,22 @@ export default function EnviarFotosPage() {
       }
     }
 
-    setEnviando(false)
     if (todasOk) {
-      // Copia fotos para o Google Drive do pedido (em background, sem bloquear)
-      fetch('/api/fotos/sync-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pedidoId }),
-      }).catch(() => {})
+      // Copia fotos para o Google Drive do pedido
+      try {
+        const syncRes = await fetch('/api/fotos/sync-drive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pedidoId }),
+        })
+        const syncJson = await syncRes.json()
+        if (syncJson.error) console.error('Sync Drive falhou:', syncJson.error)
+      } catch (e) {
+        console.error('Sync Drive erro:', e)
+      }
       setConcluido(true)
     }
+    setEnviando(false)
   }
 
   if (concluido) {
