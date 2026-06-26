@@ -29,17 +29,19 @@ export async function GET(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        client_id: appId,
+        client_id: Number(appId), // Nuvemshop exige número inteiro
         client_secret: clientSecret,
         code,
       }),
     })
 
     const tokenData = await tokenRes.json()
+    console.log('Nuvemshop token response:', JSON.stringify(tokenData))
     const accessToken = tokenData.access_token
     const storeId = tokenData.user_id || userId
 
     if (!accessToken) {
+      console.error('Sem access_token. Resposta:', JSON.stringify(tokenData))
       return NextResponse.redirect(
         new URL('/configuracoes?nuvemshop=token_erro', req.url)
       )
