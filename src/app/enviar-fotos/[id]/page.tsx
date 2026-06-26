@@ -1,13 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { ImagePlus, CheckCircle2, Loader2, X, AlertCircle } from 'lucide-react'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface FotoStatus {
   file: File
@@ -71,14 +65,19 @@ export default function EnviarFotosPage({ params }: { params: { id: string } }) 
         })
         const json = await res.json()
 
-        if (json.error || !json.token) throw new Error(json.error || 'Erro ao gerar URL de upload')
+        if (json.error || !json.signedUrl) throw new Error(json.error || 'Erro ao gerar URL de upload')
 
-        // 2. Faz upload direto para o Storage usando a URL assinada
-        const { error: uploadError } = await supabase.storage
-          .from('fotos-clientes')
-          .uploadToSignedUrl(json.path, json.token, foto.file)
+        // 2. PUT direto na signed URL — mais confiável que uploadToSignedUrl
+        const uploadRes = await fetch(json.signedUrl, {
+          method: 'PUT',
+          body: foto.file,
+          headers: { 'Content-Type': foto.file.type || 'image/jpeg' },
+        })
 
-        if (uploadError) throw new Error(uploadError.message)
+        if (!uploadRes.ok) {
+          const txt = await uploadRes.text().catch(() => uploadRes.statusText)
+          throw new Error(`Upload falhou (${uploadRes.status}): ${txt}`)
+        }
 
         setFotos(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'ok', progresso: 100 } : f
@@ -88,7 +87,7 @@ export default function EnviarFotosPage({ params }: { params: { id: string } }) 
         setFotos(prev => prev.map((f, idx) =>
           idx === i ? { ...f, status: 'erro' } : f
         ))
-        setErro(e?.message || 'Erro desconhecido')
+        setErro(`Erro: ${e?.message || 'Desconhecido'}`)
         todasOk = false
       }
     }
@@ -96,8 +95,6 @@ export default function EnviarFotosPage({ params }: { params: { id: string } }) 
     setEnviando(false)
     if (todasOk) {
       setConcluido(true)
-    } else {
-      setErro('Algumas fotos não foram enviadas. Tente novamente.')
     }
   }
 
