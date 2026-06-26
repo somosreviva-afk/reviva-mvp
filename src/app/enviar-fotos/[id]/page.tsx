@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useParams } from 'next/navigation'
 import { ImagePlus, CheckCircle2, Loader2, X, AlertCircle } from 'lucide-react'
 
 interface FotoStatus {
@@ -10,8 +11,9 @@ interface FotoStatus {
   progresso: number
 }
 
-export default function EnviarFotosPage({ params }: { params: { id: string } }) {
-  const pedidoId = params.id
+export default function EnviarFotosPage() {
+  const params = useParams()
+  const pedidoId = params.id as string
   const [pedido, setPedido] = useState<any>(null)
   const [fotos, setFotos] = useState<FotoStatus[]>([])
   const [enviando, setEnviando] = useState(false)
