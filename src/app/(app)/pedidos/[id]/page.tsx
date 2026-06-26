@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
-import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2, FolderOpen, Camera, Package, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, MessageCircle, ChevronRight, Truck, Pencil, Trash2, FolderOpen, Camera, Package, CheckCircle2, Images, Download } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
@@ -21,6 +21,25 @@ export default function PedidoDetailPage() {
   const [rastreio, setRastreio] = useState('')
   const [dataPostagem, setDataPostagem] = useState('')
   const [salvandoEnvio, setSalvandoEnvio] = useState(false)
+  const [fotos, setFotos] = useState<{ name: string; url: string }[]>([])
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
+
+  async function carregarFotos() {
+    const supabase = createClient()
+    const { data: arquivos } = await supabase.storage
+      .from('fotos-clientes')
+      .list(`pedidos/${id}`)
+    if (!arquivos || arquivos.length === 0) return
+    const urls = await Promise.all(
+      arquivos.map(async (f) => {
+        const { data } = await supabase.storage
+          .from('fotos-clientes')
+          .createSignedUrl(`pedidos/${id}/${f.name}`, 3600)
+        return { name: f.name, url: data?.signedUrl || '' }
+      })
+    )
+    setFotos(urls.filter(f => f.url))
+  }
 
   async function carregar() {
     const supabase = createClient()
@@ -50,7 +69,7 @@ export default function PedidoDetailPage() {
     setLoading(false)
   }
 
-  useEffect(() => { carregar() }, [id])
+  useEffect(() => { carregar(); carregarFotos() }, [id])
 
   async function mudarStatus(novoStatus: string) {
     setAtualizando(true)
@@ -268,6 +287,61 @@ export default function PedidoDetailPage() {
           <p className="text-sm text-gray-400 italic">Pasta não criada (configure o Google Drive em Configurações)</p>
         )}
       </div>
+
+      {/* Fotos do Cliente */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Images size={15} className="text-purple-500" />
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fotos do Cliente</p>
+          </div>
+          {fotos.length > 0 && (
+            <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
+              {fotos.length} foto{fotos.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        {fotos.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">Nenhuma foto enviada ainda.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {fotos.map((foto) => (
+              <div key={foto.name} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 group">
+                <img
+                  src={foto.url}
+                  alt={foto.name}
+                  className="w-full h-full object-cover cursor-pointer active:scale-95 transition-all"
+                  onClick={() => setFotoAmpliada(foto.url)}
+                />
+                <a
+                  href={foto.url}
+                  download={foto.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="absolute bottom-1 right-1 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <Download size={12} className="text-white" />
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Lightbox */}
+      {fotoAmpliada && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+          onClick={() => setFotoAmpliada(null)}
+        >
+          <img
+            src={fotoAmpliada}
+            alt="Foto ampliada"
+            className="max-w-full max-h-full rounded-xl object-contain"
+          />
+        </div>
+      )}
 
       {/* Itens */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
