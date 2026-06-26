@@ -164,15 +164,17 @@ export default function PedidoDetailPage() {
     const nome = pedido.clientes.nome
     const linkUpload = `https://reviva-mvp.vercel.app/enviar-fotos/${pedido.id}`
     const mensagem = [
-      `Ola, ${nome}! 💚`,
+      `Olá, ${nome}! 🌿`,
       ``,
-      `Recebemos seu pedido e ja estamos prontos para receber suas fotos!`,
+      `Seu pedido foi recebido com sucesso! ✅`,
       ``,
-      `Acesse o link abaixo, escolha as fotos do seu celular e envie diretamente:`,
+      `Para darmos início à produção, precisamos das suas fotos 📸`,
+      `Acesse o link abaixo e envie diretamente pelo celular:`,
+      ``,
       `👉 ${linkUpload}`,
       ``,
-      `E so isso! Assim que recebermos as fotos iniciamos a producao dos seus imas.`,
-      `Qualquer duvida estou a disposicao 😊`,
+      `Qualquer dúvida estou à disposição!`,
+      `Com carinho, Reviva 💚🧲`,
     ].join('\n')
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
