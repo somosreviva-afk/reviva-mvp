@@ -24,7 +24,11 @@ export default function LoginPage() {
     })
 
     if (error) {
-      setErro(error.message || 'Erro ao enviar link.')
+      if (error.message?.includes('rate limit')) {
+        setErro('Muitas tentativas. Aguarde alguns minutos e tente novamente.')
+      } else {
+        setErro('Erro ao enviar o link. Verifique o email e tente novamente.')
+      }
       setLoading(false)
       return
     }
