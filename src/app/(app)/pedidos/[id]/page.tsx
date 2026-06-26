@@ -23,6 +23,7 @@ export default function PedidoDetailPage() {
   const [salvandoEnvio, setSalvandoEnvio] = useState(false)
   const [fotos, setFotos] = useState<{ name: string; url: string }[]>([])
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
+  const [msgCopiada, setMsgCopiada] = useState(false)
 
   async function carregarFotos() {
     const supabase = createClient()
@@ -158,33 +159,31 @@ export default function PedidoDetailPage() {
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
   }
 
-  function enviarSolicitacaoFotos() {
+  async function enviarSolicitacaoFotos() {
     if (!pedido?.clientes?.whatsapp) return
     const numero = pedido.clientes.whatsapp.replace(/\D/g, '')
     const nome = pedido.clientes.nome
     const linkUpload = `https://reviva-mvp.vercel.app/enviar-fotos/${pedido.id}`
-    const e = {
-      folha:   String.fromCodePoint(0x1F33F), // 🌿
-      check:   String.fromCodePoint(0x2705),  // ✅
-      camera:  String.fromCodePoint(0x1F4F8), // 📸
-      seta:    String.fromCodePoint(0x1F449), // 👉
-      coracao: String.fromCodePoint(0x1F49A), // 💚
-      ima:     String.fromCodePoint(0x1F9F2), // 🧲
-    }
     const mensagem = [
-      `Olá, ${nome}! ${e.folha}`,
+      `Oii, ${nome}!`,
       ``,
-      `Seu pedido foi recebido com sucesso! ${e.check}`,
+      `Seu pedido foi recebido com sucesso!`,
       ``,
-      `Para darmos início à produção, precisamos das suas fotos ${e.camera}`,
+      `Para darmos inicio a producao, precisamos das suas fotos.`,
       `Acesse o link abaixo e envie diretamente pelo celular:`,
       ``,
-      `${e.seta} ${linkUpload}`,
+      `${linkUpload}`,
       ``,
-      `Qualquer dúvida estou à disposição!`,
-      `Com carinho, Reviva ${e.coracao}${e.ima}`,
+      `Qualquer duvida estou a disposicao!`,
+      `Com carinho, Reviva`,
     ].join('\n')
-    window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
+    // Copia para área de transferência e abre WhatsApp
+    try {
+      await navigator.clipboard.writeText(mensagem)
+      setMsgCopiada(true)
+      setTimeout(() => setMsgCopiada(false), 3000)
+    } catch {}
+    window.open(`https://wa.me/55${numero}`, '_blank')
   }
 
   if (loading) return (
