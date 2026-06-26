@@ -24,7 +24,7 @@ export default function LoginPage() {
     })
 
     if (error) {
-      setErro('Email não encontrado. Verifique e tente novamente.')
+      setErro(error.message || 'Erro ao enviar link.')
       setLoading(false)
       return
     }
