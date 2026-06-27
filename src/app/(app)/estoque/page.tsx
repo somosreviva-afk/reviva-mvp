@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, AlertTriangle, Package, History, Clock } from 'lucide-react'
+import { Plus, AlertTriangle, Package, History, Clock, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { garantirInsumos, TIPOS_IMA } from '@/lib/utils/estoque'
 
 export default function EstoquePage() {
   const [tab, setTab] = useState<'insumos' | 'historico'>('insumos')
   const [insumos, setInsumos] = useState<any[]>([])
-  const [lotesPendentes, setLotesPendentes] = useState<Record<string, any[]>>({}) // insumo_id → lotes pendentes
+  const [lotesPendentes, setLotesPendentes] = useState<Record<string, any[]>>({})
   const [movimentacoes, setMovimentacoes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<string | null>(null)
@@ -39,7 +39,6 @@ export default function EstoquePage() {
         .order('created_at', { ascending: true }),
     ])
 
-    // Agrupa lotes pendentes por insumo_id
     const pendMap: Record<string, any[]> = {}
     ;(lotesPend || []).forEach((l: any) => {
       if (!pendMap[l.insumo_id]) pendMap[l.insumo_id] = []
@@ -64,9 +63,13 @@ export default function EstoquePage() {
   const alertas = insumos.filter(i => Number(i.quantidade) < Number(i.estoque_minimo) && Number(i.estoque_minimo) > 0)
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-  // Separa ímãs da embalagem
   const insumoIma = insumos.filter(i => TIPOS_IMA.includes(i.tipo))
   const insumoEmbalagem = insumos.filter(i => !TIPOS_IMA.includes(i.tipo))
+
+  // Capacidade real: mínimo entre os 4 componentes do ímã
+  const capacidadeImas = insumoIma.length === 4
+    ? Math.floor(Math.min(...insumoIma.map(i => Number(i.quantidade || 0))))
+    : null
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -99,11 +102,10 @@ export default function EstoquePage() {
               </span>
               <span className="text-sm text-gray-400">{insumo.unidade}{qtd !== 1 ? 's' : ''}</span>
             </div>
-
             <div className="flex gap-3 mt-1.5 flex-wrap">
               {insumo.custo_unitario > 0 && (
                 <span className="text-xs text-gray-500">
-                  Custo atual: {fmt(Number(insumo.custo_unitario))}/{insumo.tipo === 'folha_impressao' ? 'folha' : 'un'}
+                  Custo: {fmt(Number(insumo.custo_unitario))}/un
                 </span>
               )}
               {editando === insumo.id ? (
@@ -130,8 +132,6 @@ export default function EstoquePage() {
             </div>
           </div>
         </div>
-
-        {/* Lote pendente */}
         {proximoLote && (
           <div className="mt-3 bg-orange-50 rounded-xl px-3 py-2 flex items-center gap-2">
             <Clock size={13} className="text-orange-500 shrink-0" />
@@ -151,13 +151,30 @@ export default function EstoquePage() {
   }
 
   return (
-    <div className="p-4 pb-28">
-      {/* Header */}
+    <div className="p-4 pb-32">
       <div className="flex items-center gap-3 pt-4 mb-4">
         <h1 className="text-xl font-bold text-gray-900">Estoque</h1>
       </div>
 
-      {/* Alerta estoque baixo */}
+      {/* Card: Capacidade de ímãs */}
+      {capacidadeImas !== null && (
+        <div className={`rounded-2xl p-4 mb-4 ${capacidadeImas === 0 ? 'bg-red-50 border border-red-200' : capacidadeImas < 30 ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-1 ${capacidadeImas === 0 ? 'text-red-500' : capacidadeImas < 30 ? 'text-orange-500' : 'text-green-600'}">
+            🧲 Capacidade de Produção
+          </p>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-4xl font-bold ${capacidadeImas === 0 ? 'text-red-600' : capacidadeImas < 30 ? 'text-orange-600' : 'text-green-700'}`}>
+              {capacidadeImas}
+            </span>
+            <span className="text-base text-gray-500">ímãs você consegue fazer agora</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Limitado pelo componente com menor estoque entre os 4
+          </p>
+        </div>
+      )}
+
+      {/* Alertas */}
       {alertas.length > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 mb-4">
           <div className="flex items-center gap-2 mb-2">
@@ -195,10 +212,8 @@ export default function EstoquePage() {
         </button>
       </div>
 
-      {/* Tab: Insumos */}
       {tab === 'insumos' && (
         <div className="space-y-5">
-          {/* Componentes do Ímã */}
           {insumoIma.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
@@ -209,8 +224,6 @@ export default function EstoquePage() {
               </div>
             </div>
           )}
-
-          {/* Embalagem */}
           {insumoEmbalagem.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">
@@ -224,7 +237,6 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* Tab: Histórico */}
       {tab === 'historico' && (
         <div>
           {movimentacoes.length === 0 ? (
@@ -238,9 +250,11 @@ export default function EstoquePage() {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                         m.tipo === 'entrada'
                           ? 'bg-green-100 text-green-700'
+                          : m.observacoes?.includes('Descarte')
+                          ? 'bg-red-100 text-red-700'
                           : 'bg-orange-100 text-orange-700'
                       }`}>
-                        {m.tipo === 'entrada' ? '↑ Entrada' : '↓ Saída'}
+                        {m.tipo === 'entrada' ? '↑ Entrada' : m.observacoes?.includes('Descarte') ? '🗑 Descarte' : '↓ Saída'}
                       </span>
                       <span className="text-sm font-medium text-gray-900 truncate">
                         {m.insumos?.nome}
@@ -270,8 +284,15 @@ export default function EstoquePage() {
         </div>
       )}
 
-      {/* Botão flutuante */}
-      <div className="fixed bottom-20 right-4 z-40">
+      {/* Botões flutuantes */}
+      <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2 items-end">
+        <Link
+          href="/estoque/descarte"
+          className="flex items-center gap-2 bg-red-500 text-white px-4 py-3 rounded-2xl shadow-lg font-semibold text-sm"
+        >
+          <Trash2 size={16} />
+          Descarte
+        </Link>
         <Link
           href="/estoque/entrada"
           className="flex items-center gap-2 bg-green-600 text-white px-5 py-3.5 rounded-2xl shadow-lg font-semibold text-sm"
