@@ -9,9 +9,11 @@ export const INSUMOS_PADRAO = [
   { tipo: 'caixa', nome: 'Caixa', unidade: 'unidade', estoque_minimo: 20 },
   { tipo: 'saquinho', nome: 'Saquinho', unidade: 'unidade', estoque_minimo: 25 },
   { tipo: 'envelope', nome: 'Envelope', unidade: 'unidade', estoque_minimo: 20 },
-  { tipo: 'papel_seda', nome: 'Papel Seda', unidade: 'unidade', estoque_minimo: 20 },
+  { tipo: 'papel_seda', nome: 'Papel Seda', unidade: 'unidade', estoque_minimo: 40 },
   { tipo: 'cartao', nome: 'Cartão Reviva', unidade: 'unidade', estoque_minimo: 20 },
   { tipo: 'folha_impressao', nome: 'Folha de Impressão', unidade: 'folha', estoque_minimo: 10 },
+  { tipo: 'adesivo_caixa', nome: 'Adesivo da Caixa', unidade: 'unidade', estoque_minimo: 20 },
+  { tipo: 'lacre_caixa', nome: 'Lacre da Caixa', unidade: 'unidade', estoque_minimo: 20 },
 ]
 
 export const TIPOS_IMA = ['ima_magnetico', 'placa_plastico', 'placa_metal', 'plastico_protecao']
@@ -30,6 +32,8 @@ export const TIPO_PARA_CONFIG: Record<string, string> = {
   papel_seda: 'papel_seda_custo',
   cartao: 'cartao_custo',
   folha_impressao: 'impressao_valor_folha',
+  adesivo_caixa: 'adesivo_caixa_custo',
+  lacre_caixa: 'lacre_caixa_custo',
 }
 
 export function calcularConsumo(qtdImas: number, fotosPerFolha: number = 12): Record<string, number> {
@@ -42,6 +46,8 @@ export function calcularConsumo(qtdImas: number, fotosPerFolha: number = 12): Re
     folha_impressao: qtdImas / fotosPerFolha,
     saquinho: Math.ceil(qtdImas / 4),
     caixa: 1,
+    adesivo_caixa: 1,
+    lacre_caixa: 1,
     envelope: 1,
     papel_seda: qtdImas <= 12 ? 1 : 2,
     cartao: 1,

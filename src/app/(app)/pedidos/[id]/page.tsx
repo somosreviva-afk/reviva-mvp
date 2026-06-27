@@ -139,11 +139,23 @@ export default function PedidoDetailPage() {
 
   async function cancelar() {
     if (!confirm('Cancelar este pedido?')) return
+    // Devolve estoque antes de cancelar
+    await fetch('/api/pedidos/restaurar-estoque', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedidoId: id }),
+    })
     await mudarStatus('cancelado')
   }
 
   async function excluir() {
     if (!confirm('Excluir este pedido permanentemente? Esta ação não pode ser desfeita.')) return
+    // Devolve estoque antes de excluir
+    await fetch('/api/pedidos/restaurar-estoque', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedidoId: id }),
+    })
     const supabase = createClient()
     await supabase.from('itens_pedido').delete().eq('pedido_id', id)
     await supabase.from('pedidos').delete().eq('id', id)
