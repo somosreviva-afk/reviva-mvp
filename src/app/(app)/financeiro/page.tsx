@@ -127,20 +127,25 @@ export default async function FinanceiroPage() {
         </div>
 
         {/* Compras de material */}
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
-                <TrendingDown size={14} className="text-orange-600" />
+        <Link href="/financeiro/compras" className="p-4 border-b border-gray-100 flex items-center justify-between group">
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <TrendingDown size={14} className="text-orange-600" />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Compras de material</span>
               </div>
-              <span className="text-sm font-semibold text-gray-700">Compras de material</span>
+              <div className="flex items-center gap-1">
+                <span className="text-base font-bold text-orange-600">
+                  {totalCompras > 0 ? `−${formatCurrency(totalCompras)}` : formatCurrency(0)}
+                </span>
+                <ChevronRight size={14} className="text-gray-300" />
+              </div>
             </div>
-            <span className="text-base font-bold text-orange-600">
-              {totalCompras > 0 ? `−${formatCurrency(totalCompras)}` : formatCurrency(0)}
-            </span>
+            <p className="text-xs text-gray-400 ml-9">toque para ver detalhes</p>
           </div>
-          <p className="text-xs text-gray-400 ml-9">dinheiro gasto comprando insumos</p>
-        </div>
+        </Link>
 
         {/* Custo de produção */}
         <div className="p-4 border-b border-gray-100">
