@@ -90,6 +90,37 @@ export default async function FinanceiroPage() {
         </p>
       </div>
 
+      {/* Divisão do caixa */}
+      {saldoCaixa > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Como dividir o saldo</p>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
+                <span className="text-sm text-gray-700">Seu salário (⅓)</span>
+              </div>
+              <span className="text-sm font-bold text-green-600">{formatCurrency(saldoCaixa / 3)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span className="text-sm text-gray-700">Investimento/estoque (⅓)</span>
+              </div>
+              <span className="text-sm font-bold text-blue-600">{formatCurrency(saldoCaixa / 3)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                <span className="text-sm text-gray-700">Reserva (⅓)</span>
+              </div>
+              <span className="text-sm font-bold text-purple-600">{formatCurrency(saldoCaixa / 3)}</span>
+            </div>
+            <p className="text-[10px] text-gray-300 mt-1">Baseado no saldo disponível agora · só uma sugestão</p>
+          </div>
+        </div>
+      )}
+
       {/* Breakdown do mês */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
 
