@@ -20,12 +20,13 @@ type Custos = {
 }
 
 function calcularCustos(campos: any, config: Config): Custos {
-  const qtd = parseInt(campos.qtd_convidados) || 0
+  // Usa qtd_fotoimagas para o custo; se não preenchido, usa qtd_convidados como fallback
+  const qtdImas = parseInt(campos.qtd_fotoimagas) || parseInt(campos.qtd_convidados) || 0
   const horas = parseInt(campos.horas_evento) || 4
   const custoIma = parseFloat(config.custo_fotoimagas_por_convidado || '4.50')
   const custoAuxiliarHora = parseFloat(config.custo_auxiliar_hora || '30')
 
-  const fotoimagas = qtd * custoIma
+  const fotoimagas = qtdImas * custoIma
   const auxiliar = parseFloat(campos.custo_auxiliar) || (horas * custoAuxiliarHora)
   const combustivel = parseFloat(campos.custo_combustivel) || 0
   const pedagio = parseFloat(campos.custo_pedagio) || 0
@@ -60,6 +61,7 @@ export default function NovoOrcamentoPage() {
     tipo_evento: '',
     cidade: '',
     qtd_convidados: '',
+    qtd_fotoimagas: '',
     data_evento: '',
     local_evento: '',
     horas_evento: '4',
@@ -102,6 +104,7 @@ export default function NovoOrcamentoPage() {
 
   // Preço da tabela
   const qtdConvidados = parseInt(campos.qtd_convidados) || 0
+  const qtdImas = parseInt(campos.qtd_fotoimagas) || qtdConvidados
   const precoTabela = tabelaPrecos.find(t => qtdConvidados >= t.qtd_min && qtdConvidados <= t.qtd_max)
 
   const valorFinalExibido = parseFloat(campos.valor_final) || valorSugerido
@@ -120,6 +123,7 @@ export default function NovoOrcamentoPage() {
         status: 'rascunho',
         tipo_evento: campos.tipo_evento || null,
         qtd_convidados: qtdConvidados || null,
+        qtd_fotoimagas: parseInt(campos.qtd_fotoimagas) || qtdConvidados || null,
         data_evento: campos.data_evento || null,
         local_evento: campos.local_evento || null,
         horas_evento: parseInt(campos.horas_evento) || 4,
@@ -227,15 +231,29 @@ export default function NovoOrcamentoPage() {
       {/* Dados do evento */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
         <h2 className="font-semibold text-gray-800 text-sm">Dados do evento</h2>
-        <div>
-          <label className="text-xs font-medium text-gray-600">Nº de convidados *</label>
-          <input
-            type="number"
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-purple-400"
-            value={campos.qtd_convidados}
-            onChange={e => atualizar('qtd_convidados', e.target.value)}
-            placeholder="Ex: 150"
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Nº de convidados</label>
+            <p className="text-[10px] text-gray-400 mb-1">Informado pelo cliente</p>
+            <input
+              type="number"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400"
+              value={campos.qtd_convidados}
+              onChange={e => atualizar('qtd_convidados', e.target.value)}
+              placeholder="Ex: 150"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-pink-700">Qtd. de imãs 🧲</label>
+            <p className="text-[10px] text-gray-400 mb-1">Base do custo real</p>
+            <input
+              type="number"
+              className="w-full border border-[#b5005e] border-2 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-600 bg-pink-50"
+              value={campos.qtd_fotoimagas}
+              onChange={e => atualizar('qtd_fotoimagas', e.target.value)}
+              placeholder={campos.qtd_convidados || 'Ex: 120'}
+            />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -306,7 +324,7 @@ export default function NovoOrcamentoPage() {
       </div>
 
       {/* Resultado */}
-      {qtdConvidados > 0 && (
+      {(qtdConvidados > 0 || qtdImas > 0) && (
         <div className="bg-purple-600 rounded-2xl p-4 text-white shadow-sm space-y-3">
           <div className="flex items-center gap-2">
             <Calculator size={16} />
@@ -315,7 +333,7 @@ export default function NovoOrcamentoPage() {
 
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between">
-              <span className="text-purple-200">Fotoímãs ({qtdConvidados} × R$ {parseFloat(config.custo_fotoimagas_por_convidado || '4.50').toFixed(2)})</span>
+              <span className="text-purple-200">🧲 Imãs ({qtdImas} × R$ {parseFloat(config.custo_fotoimagas_por_convidado || '4.50').toFixed(2)})</span>
               <span>R$ {custos.fotoimagas.toFixed(2)}</span>
             </div>
             {custos.auxiliar > 0 && <div className="flex justify-between"><span className="text-purple-200">Auxiliar</span><span>R$ {custos.auxiliar.toFixed(2)}</span></div>}
