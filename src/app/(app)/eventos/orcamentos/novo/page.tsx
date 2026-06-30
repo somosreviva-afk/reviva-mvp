@@ -48,6 +48,7 @@ export default function NovoOrcamentoPage() {
   const [config, setConfig] = useState<Config>({})
   const [tabelaPrecos, setTabelaPrecos] = useState<any[]>([])
   const [salvando, setSalvando] = useState(false)
+  const [erroSalvar, setErroSalvar] = useState('')
   const [mostrarCustos, setMostrarCustos] = useState(false)
 
   const [campos, setCampos] = useState({
@@ -105,43 +106,64 @@ export default function NovoOrcamentoPage() {
 
   async function salvar(status: string) {
     setSalvando(true)
-    // Gerar número do orçamento
-    const { count } = await supabase.from('eventos_orcamentos').select('*', { count: 'exact', head: true })
-    const numero = `ORC-${String((count || 0) + 1).padStart(3, '0')}`
+    setErroSalvar('')
+    try {
+      // Gerar número do orçamento
+      const { count } = await supabase.from('eventos_orcamentos').select('*', { count: 'exact', head: true })
+      const numero = `ORC-${String((count || 0) + 1).padStart(3, '0')}`
 
-    const { data: novoOrc } = await supabase.from('eventos_orcamentos').insert({
-      numero,
-      status: 'rascunho',
-      nome_cliente: campos.nome_cliente || null,
-      telefone_cliente: campos.telefone_cliente || null,
-      email_cliente: campos.email_cliente || null,
-      tipo_evento: campos.tipo_evento || null,
-      cidade: campos.cidade || null,
-      qtd_convidados: qtdConvidados || null,
-      data_evento: campos.data_evento || null,
-      local_evento: campos.local_evento || null,
-      horas_evento: parseInt(campos.horas_evento) || 4,
-      custo_fotoimagas: custos.fotoimagas,
-      custo_auxiliar: custos.auxiliar,
-      custo_combustivel: custos.combustivel,
-      custo_pedagio: custos.pedagio,
-      custo_alimentacao: custos.alimentacao,
-      custo_hospedagem: custos.hospedagem,
-      custo_embalagem: custos.embalagem,
-      custo_outros: custos.outros,
-      custo_total: custos.total,
-      margem_lucro: parseFloat(campos.margem_lucro),
-      valor_sugerido: valorSugerido,
-      valor_final: parseFloat(campos.valor_final) || valorSugerido,
-      sinal_percentual: parseFloat(campos.sinal_percentual),
-      validade_dias: parseInt(campos.validade_dias),
-      observacoes: campos.observacoes || null,
-    }).select('id').single()
-    setSalvando(false)
-    if (novoOrc?.id) {
-      router.push(`/eventos/orcamentos/${novoOrc.id}`)
-    } else {
-      router.push('/eventos/orcamentos')
+      // Tenta inserir só com colunas básicas que certamente existem + as novas
+      const dadosInsert: any = {
+        numero,
+        status: 'rascunho',
+        tipo_evento: campos.tipo_evento || null,
+        qtd_convidados: qtdConvidados || null,
+        data_evento: campos.data_evento || null,
+        local_evento: campos.local_evento || null,
+        horas_evento: parseInt(campos.horas_evento) || 4,
+        custo_fotoimagas: custos.fotoimagas,
+        custo_auxiliar: custos.auxiliar,
+        custo_combustivel: custos.combustivel,
+        custo_pedagio: custos.pedagio,
+        custo_alimentacao: custos.alimentacao,
+        custo_hospedagem: custos.hospedagem,
+        custo_embalagem: custos.embalagem,
+        custo_outros: custos.outros,
+        custo_total: custos.total,
+        margem_lucro: parseFloat(campos.margem_lucro),
+        valor_sugerido: valorSugerido,
+        valor_final: parseFloat(campos.valor_final) || valorSugerido,
+        sinal_percentual: parseFloat(campos.sinal_percentual),
+        validade_dias: parseInt(campos.validade_dias),
+        observacoes: campos.observacoes || null,
+      }
+
+      // Adiciona colunas de cliente se existirem (após migração SQL)
+      if (campos.nome_cliente) dadosInsert.nome_cliente = campos.nome_cliente
+      if (campos.telefone_cliente) dadosInsert.telefone_cliente = campos.telefone_cliente
+      if (campos.email_cliente) dadosInsert.email_cliente = campos.email_cliente
+      if (campos.cidade) dadosInsert.cidade = campos.cidade
+
+      const { data: novoOrc, error } = await supabase
+        .from('eventos_orcamentos')
+        .insert(dadosInsert)
+        .select('id')
+        .single()
+
+      setSalvando(false)
+      if (error) {
+        console.error('Erro ao salvar orçamento:', error)
+        setErroSalvar(`Erro ao salvar: ${error.message}`)
+        return
+      }
+      if (novoOrc?.id) {
+        router.push(`/eventos/orcamentos/${novoOrc.id}`)
+      } else {
+        router.push('/eventos/orcamentos')
+      }
+    } catch (e: any) {
+      setSalvando(false)
+      setErroSalvar(`Erro inesperado: ${e?.message || 'tente novamente'}`)
     }
   }
 
@@ -388,7 +410,12 @@ export default function NovoOrcamentoPage() {
       </div>
 
       {/* Botão salvar */}
-      <div className="fixed bottom-20 left-0 right-0 px-4">
+      <div className="fixed bottom-20 left-0 right-0 px-4 space-y-2">
+        {erroSalvar && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-700">
+            ⚠️ {erroSalvar}
+          </div>
+        )}
         <button
           onClick={() => salvar('rascunho')}
           disabled={salvando}
