@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       impressao_fotos_por_folha: Number(cfg?.impressao_fotos_por_folha || 12),
     }
 
-    const custos = calcularCustosPedido(qtdImasTotal, configMateriais, 1)
+    const custos = calcularCustosPedido(qtdImasTotal, configMateriais, 1, !!transportadora)
 
     // ── 4. Dados financeiros do pedido ────────────────────────────
     const formaPagamento = mapearFormaPagamento(

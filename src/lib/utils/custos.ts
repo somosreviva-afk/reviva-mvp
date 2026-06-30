@@ -18,7 +18,7 @@ export const CONFIG_PADRAO: ConfigMateriais = {
   envelope_custo: 0.28,
   papel_seda_custo: 0.10,
   cartao_custo: 0.16,
-  impressao_valor_folha: 2.00,
+  impressao_valor_folha: 2.00,  // R$2 por kit impresso
   impressao_fotos_por_folha: 12,
   adesivo_caixa_custo: 0.32,
   lacre_caixa_custo: 0.27,
@@ -39,12 +39,12 @@ export interface CustosPedido {
 }
 
 // qtdEmbrulhos: quantos pacotes separados (padrão 1)
-// Ex: Nayara pede 12 ímãs em 4 embrulhos de 3 → qtdEmbrulhos = 4
-// Multiplica caixa, cartão e papel seda por qtdEmbrulhos
+// temTransportadora: true = tem frete/correio → inclui envelope
 export function calcularCustosPedido(
   qtdImas: number,
   config: ConfigMateriais,
-  qtdEmbrulhos: number = 1
+  qtdEmbrulhos: number = 1,
+  temTransportadora: boolean = false
 ): CustosPedido {
   if (qtdImas <= 0) {
     return { qtd_imas: 0, custo_imas: 0, custo_impressao: 0, custo_saquinhos: 0, custo_caixa: 0, custo_envelope: 0, custo_papel_seda: 0, custo_cartao: 0, custo_adesivo_caixa: 0, custo_lacre_caixa: 0, custo_total_pedido: 0 }
@@ -52,12 +52,13 @@ export function calcularCustosPedido(
   const n = Math.max(1, qtdEmbrulhos)
   const r2 = (v: number) => Math.round(v * 100) / 100
   const custo_imas = r2(qtdImas * config.ima_custo)
-  // Impressao: valor fixo por pedido (independente da quantidade)
-  const custo_impressao = r2(config.impressao_valor_folha)
+  // Impressão: 1 folha por embrulho
+  const custo_impressao = r2(n * config.impressao_valor_folha)
   const custo_saquinhos = r2(Math.ceil(qtdImas / 4) * config.saquinho_custo)
-  // Embrulho separado: cada pacote tem sua própria caixa, cartão e papel seda
+  // Cada embrulho tem sua própria caixa, seda, cartão, adesivo e lacre
   const custo_caixa = r2(n * config.caixa_custo)
-  const custo_envelope = r2(config.envelope_custo)
+  // Envelope só se for pelo correio
+  const custo_envelope = temTransportadora ? r2(config.envelope_custo) : 0
   const custo_papel_seda = r2(n * config.papel_seda_custo)
   const custo_cartao = r2(n * config.cartao_custo)
   const custo_adesivo_caixa = r2(n * (config.adesivo_caixa_custo || 0))

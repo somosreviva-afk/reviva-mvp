@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, Users, ShoppingBag, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Package, Users, ShoppingBag, DollarSign, PartyPopper } from 'lucide-react'
 
 const ITENS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Início' },
-  { href: '/produtos', icon: Package, label: 'Produtos' },
-  { href: '/clientes', icon: Users, label: 'Clientes' },
   { href: '/pedidos', icon: ShoppingBag, label: 'Pedidos' },
   { href: '/financeiro', icon: DollarSign, label: 'Caixa' },
+  { href: '/eventos', icon: PartyPopper, label: '🎉 Eventos' },
+  { href: '/clientes', icon: Users, label: 'Mais' },
 ]
 
 export function BottomNav() {

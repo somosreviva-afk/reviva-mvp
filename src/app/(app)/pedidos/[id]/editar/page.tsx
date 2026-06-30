@@ -55,7 +55,7 @@ export default function EditarPedidoPage() {
     return s + qtdItem * i.quantidade
   }, 0)
 
-  const custos = calcularCustosPedido(qtdImasTotal, configMateriais, qtdEmbrulhos)
+  const custos = calcularCustosPedido(qtdImasTotal, configMateriais, qtdEmbrulhos, !!transportadora)
   const lucroReal = valorRecebido - custos.custo_total_pedido
 
   useEffect(() => {
