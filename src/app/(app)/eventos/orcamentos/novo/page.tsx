@@ -103,15 +103,15 @@ export default function NovoOrcamentoPage() {
 
   const valorFinalExibido = parseFloat(campos.valor_final) || valorSugerido
 
-  async function salvar(status: 'rascunho' | 'enviado') {
+  async function salvar(status: string) {
     setSalvando(true)
     // Gerar número do orçamento
     const { count } = await supabase.from('eventos_orcamentos').select('*', { count: 'exact', head: true })
     const numero = `ORC-${String((count || 0) + 1).padStart(3, '0')}`
 
-    await supabase.from('eventos_orcamentos').insert({
+    const { data: novoOrc } = await supabase.from('eventos_orcamentos').insert({
       numero,
-      status,
+      status: 'rascunho',
       nome_cliente: campos.nome_cliente || null,
       telefone_cliente: campos.telefone_cliente || null,
       email_cliente: campos.email_cliente || null,
@@ -136,8 +136,13 @@ export default function NovoOrcamentoPage() {
       sinal_percentual: parseFloat(campos.sinal_percentual),
       validade_dias: parseInt(campos.validade_dias),
       observacoes: campos.observacoes || null,
-    })
-    router.push('/eventos/orcamentos')
+    }).select('id').single()
+    setSalvando(false)
+    if (novoOrc?.id) {
+      router.push(`/eventos/orcamentos/${novoOrc.id}`)
+    } else {
+      router.push('/eventos/orcamentos')
+    }
   }
 
   function atualizar(campo: string, valor: string) {
@@ -382,21 +387,14 @@ export default function NovoOrcamentoPage() {
         </div>
       </div>
 
-      {/* Botões */}
-      <div className="fixed bottom-20 left-0 right-0 px-4 flex gap-3">
+      {/* Botão salvar */}
+      <div className="fixed bottom-20 left-0 right-0 px-4">
         <button
           onClick={() => salvar('rascunho')}
           disabled={salvando}
-          className="flex-1 py-3 rounded-xl border-2 border-purple-600 text-purple-600 text-sm font-semibold bg-white shadow-lg"
+          className="w-full py-4 rounded-2xl bg-[#b5005e] text-white text-base font-bold shadow-xl disabled:opacity-50"
         >
-          Salvar rascunho
-        </button>
-        <button
-          onClick={() => salvar('enviado')}
-          disabled={salvando || qtdConvidados === 0}
-          className="flex-1 py-3 rounded-xl bg-purple-600 text-white text-sm font-semibold shadow-lg disabled:opacity-50"
-        >
-          {salvando ? 'Salvando...' : 'Marcar como enviado'}
+          {salvando ? 'Salvando...' : '💾 Salvar orçamento'}
         </button>
       </div>
     </div>
