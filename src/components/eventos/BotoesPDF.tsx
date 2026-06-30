@@ -31,6 +31,7 @@ export type DadosPDF = {
   margem_lucro?: number
   validade_dias?: number
   observacoes?: string
+  itens_extras?: string
   criado_em?: string
 }
 
@@ -196,7 +197,9 @@ async function gerarPDF(dados: DadosPDF, config: Record<string, string>, modelo:
     // O que está incluso
     secao('O QUE ESTÁ INCLUSO', mg, y)
     y += 5
-    const itens = (config.itens_inclusos || 'Equipe durante todo o evento|Impressão dos fotoímãs em alta qualidade|Produção ao vivo|Estrutura completa|Atendimento personalizado|Lembrança exclusiva para os convidados|Organização completa durante o evento').split('|')
+    const itensPadrao = (config.itens_inclusos || 'Equipe durante todo o evento|Impressão dos fotoímãs em alta qualidade|Produção ao vivo|Estrutura completa|Atendimento personalizado|Lembrança exclusiva para os convidados|Organização completa durante o evento').split('|')
+    const itensExtras = dados.itens_extras ? dados.itens_extras.split('|') : []
+    const itens = [...itensPadrao, ...itensExtras]
     const mid = Math.ceil(itens.length / 2)
     let yi1 = y, yi2 = y
     itens.slice(0, mid).forEach(item => { yi1 = bullet(item.trim(), c1, yi1) + 1 })
@@ -350,7 +353,9 @@ async function gerarPDF(dados: DadosPDF, config: Record<string, string>, modelo:
     doc.text('O QUE ESTÁ INCLUSO', mg + 4, y + 1)
     y += 12
 
-    const itensP = (config.itens_inclusos || 'Equipe durante todo o evento|Impressão dos fotoímãs em alta qualidade|Produção ao vivo|Estrutura completa|Atendimento personalizado|Lembrança exclusiva para os convidados|Organização completa durante o evento').split('|')
+    const itensPadraoP = (config.itens_inclusos || 'Equipe durante todo o evento|Impressão dos fotoímãs em alta qualidade|Produção ao vivo|Estrutura completa|Atendimento personalizado|Lembrança exclusiva para os convidados|Organização completa durante o evento').split('|')
+    const itensExtrasP = dados.itens_extras ? dados.itens_extras.split('|') : []
+    const itensP = [...itensPadraoP, ...itensExtrasP]
     itensP.forEach(item => {
       doc.setFillColor(cr, cg, cb)
       doc.roundedRect(mg, y - 3.5, 5, 5, 0.8, 0.8, 'F')

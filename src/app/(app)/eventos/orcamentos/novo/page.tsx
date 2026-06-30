@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import { Calculator, ChevronDown, ChevronUp, Info } from 'lucide-react'
+import { Calculator, ChevronDown, ChevronUp, Info, Plus, X } from 'lucide-react'
 
 type Config = Record<string, string>
 
@@ -50,6 +50,8 @@ export default function NovoOrcamentoPage() {
   const [salvando, setSalvando] = useState(false)
   const [erroSalvar, setErroSalvar] = useState('')
   const [mostrarCustos, setMostrarCustos] = useState(false)
+  const [itensExtras, setItensExtras] = useState<string[]>([])
+  const [novoItem, setNovoItem] = useState('')
 
   const [campos, setCampos] = useState({
     nome_cliente: '',
@@ -143,6 +145,7 @@ export default function NovoOrcamentoPage() {
       if (campos.telefone_cliente) dadosInsert.telefone_cliente = campos.telefone_cliente
       if (campos.email_cliente) dadosInsert.email_cliente = campos.email_cliente
       if (campos.cidade) dadosInsert.cidade = campos.cidade
+      if (itensExtras.length > 0) dadosInsert.itens_extras = itensExtras.join('|')
 
       const { data: novoOrc, error } = await supabase
         .from('eventos_orcamentos')
@@ -385,6 +388,64 @@ export default function NovoOrcamentoPage() {
           </div>
         </div>
       )}
+
+      {/* Serviços extras */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+        <div>
+          <h2 className="font-semibold text-gray-800 text-sm">Serviços extras inclusos</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Além dos itens padrão — aparecerão no PDF do cliente</p>
+        </div>
+        {/* Itens padrão (só visualização) */}
+        <div className="bg-gray-50 rounded-xl p-3 space-y-1.5">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Itens padrão (configurações)</p>
+          {(config.itens_inclusos || 'Equipe durante todo o evento|Impressão dos fotoímãs em alta qualidade|Produção ao vivo|Estrutura completa|Atendimento personalizado').split('|').map((item, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="w-4 h-4 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center text-[10px] font-bold flex-shrink-0">✓</span>
+              {item.trim()}
+            </div>
+          ))}
+        </div>
+        {/* Extras adicionados */}
+        {itensExtras.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Extras adicionados</p>
+            {itensExtras.map((item, i) => (
+              <div key={i} className="flex items-center gap-2 bg-pink-50 rounded-xl px-3 py-2">
+                <span className="flex-1 text-sm text-gray-700">{item}</span>
+                <button onClick={() => setItensExtras(p => p.filter((_, idx) => idx !== i))} className="text-pink-400 hover:text-pink-600">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Input para novo item */}
+        <div className="flex gap-2">
+          <input
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-pink-400"
+            value={novoItem}
+            onChange={e => setNovoItem(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && novoItem.trim()) {
+                setItensExtras(p => [...p, novoItem.trim()])
+                setNovoItem('')
+              }
+            }}
+            placeholder="Ex: álbum digital, totem, cabine..."
+          />
+          <button
+            onClick={() => {
+              if (novoItem.trim()) {
+                setItensExtras(p => [...p, novoItem.trim()])
+                setNovoItem('')
+              }
+            }}
+            className="w-10 h-10 rounded-xl bg-[#b5005e] text-white flex items-center justify-center flex-shrink-0"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      </div>
 
       {/* Validade e observações */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
