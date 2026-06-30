@@ -22,7 +22,7 @@ type Custos = {
 function calcularCustos(campos: any, config: Config): Custos {
   const qtd = parseInt(campos.qtd_convidados) || 0
   const horas = parseInt(campos.horas_evento) || 4
-  const custoIma = parseFloat(config.custo_fotoimagas_por_convidado || '1.75')
+  const custoIma = parseFloat(config.custo_fotoimagas_por_convidado || '4.50')
   const custoAuxiliarHora = parseFloat(config.custo_auxiliar_hora || '30')
 
   const fotoimagas = qtd * custoIma
@@ -51,6 +51,11 @@ export default function NovoOrcamentoPage() {
   const [mostrarCustos, setMostrarCustos] = useState(false)
 
   const [campos, setCampos] = useState({
+    nome_cliente: '',
+    telefone_cliente: '',
+    email_cliente: '',
+    tipo_evento: '',
+    cidade: '',
     qtd_convidados: '',
     data_evento: '',
     local_evento: '',
@@ -107,6 +112,11 @@ export default function NovoOrcamentoPage() {
     await supabase.from('eventos_orcamentos').insert({
       numero,
       status,
+      nome_cliente: campos.nome_cliente || null,
+      telefone_cliente: campos.telefone_cliente || null,
+      email_cliente: campos.email_cliente || null,
+      tipo_evento: campos.tipo_evento || null,
+      cidade: campos.cidade || null,
       qtd_convidados: qtdConvidados || null,
       data_evento: campos.data_evento || null,
       local_evento: campos.local_evento || null,
@@ -139,6 +149,49 @@ export default function NovoOrcamentoPage() {
       <div>
         <h1 className="text-lg font-bold text-purple-900">Novo Orçamento</h1>
         <p className="text-xs text-purple-500">Simulador inteligente de preços</p>
+      </div>
+
+      {/* Dados do cliente */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+        <h2 className="font-semibold text-gray-800 text-sm">Dados do cliente</h2>
+        <div>
+          <label className="text-xs font-medium text-gray-600">Nome do cliente</label>
+          <input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-pink-400"
+            value={campos.nome_cliente} onChange={e => atualizar('nome_cliente', e.target.value)} placeholder="Nome completo" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Telefone / WhatsApp</label>
+            <input type="tel" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-pink-400"
+              value={campos.telefone_cliente} onChange={e => atualizar('telefone_cliente', e.target.value)} placeholder="(11) 99999-9999" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">E-mail</label>
+            <input type="email" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-pink-400"
+              value={campos.email_cliente} onChange={e => atualizar('email_cliente', e.target.value)} placeholder="email@email.com" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Tipo de evento</label>
+            <select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-pink-400"
+              value={campos.tipo_evento} onChange={e => atualizar('tipo_evento', e.target.value)}>
+              <option value="">Selecione...</option>
+              <option value="casamento">Casamento</option>
+              <option value="aniversario">Aniversário</option>
+              <option value="corporativo">Corporativo</option>
+              <option value="formatura">Formatura</option>
+              <option value="debutante">Debutante</option>
+              <option value="batizado">Batizado</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Cidade</label>
+            <input className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mt-1 focus:outline-none focus:border-pink-400"
+              value={campos.cidade} onChange={e => atualizar('cidade', e.target.value)} placeholder="São Paulo" />
+          </div>
+        </div>
       </div>
 
       {/* Dados do evento */}
@@ -232,7 +285,7 @@ export default function NovoOrcamentoPage() {
 
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between">
-              <span className="text-purple-200">Fotoímãs ({qtdConvidados} × R$ {parseFloat(config.custo_fotoimagas_por_convidado || '1.75').toFixed(2)})</span>
+              <span className="text-purple-200">Fotoímãs ({qtdConvidados} × R$ {parseFloat(config.custo_fotoimagas_por_convidado || '4.50').toFixed(2)})</span>
               <span>R$ {custos.fotoimagas.toFixed(2)}</span>
             </div>
             {custos.auxiliar > 0 && <div className="flex justify-between"><span className="text-purple-200">Auxiliar</span><span>R$ {custos.auxiliar.toFixed(2)}</span></div>}
