@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils/formatters'
-import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera, AlertTriangle, Boxes, CheckCircle2, Send, DollarSign, CreditCard } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Truck, TrendingDown, Settings, Package, Heart, BarChart2, Camera, AlertTriangle, Boxes, CheckCircle2, Send, DollarSign, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 
 type Periodo = 'hoje' | 'semana' | 'mes' | 'ano'
@@ -34,27 +34,35 @@ const STATUS_COLORS: Record<string, string> = {
   cancelado: 'bg-red-100 text-red-700',
 }
 
-function getDataInicio(periodo: Periodo): string {
+function getDatasDoFiltro(periodo: Periodo, mes: number, ano: number): { inicio: string; fim: string | null } {
   const hoje = new Date()
   switch (periodo) {
-    case 'hoje':
-      return new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).toISOString()
+    case 'hoje': {
+      const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+      const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1)
+      return { inicio: inicio.toISOString(), fim: fim.toISOString() }
+    }
     case 'semana': {
       const d = new Date(hoje)
       const day = d.getDay()
       const diff = d.getDate() - day + (day === 0 ? -6 : 1)
       d.setDate(diff)
       d.setHours(0, 0, 0, 0)
-      return d.toISOString()
+      return { inicio: d.toISOString(), fim: null }
+    }
+    case 'mes': {
+      const inicio = new Date(ano, mes, 1)
+      const fim = new Date(ano, mes + 1, 1)
+      return { inicio: inicio.toISOString(), fim: fim.toISOString() }
     }
     case 'ano':
-      return new Date(hoje.getFullYear(), 0, 1).toISOString()
+      return { inicio: new Date(hoje.getFullYear(), 0, 1).toISOString(), fim: null }
     default:
-      return new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString()
+      return { inicio: new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString(), fim: null }
   }
 }
 
-async function getDashboardData(empresaId: string, dataInicio: string) {
+async function getDashboardData(empresaId: string, dataInicio: string, dataFim: string | null) {
   const supabase = await createClient()
 
   // Meta de recuperação do investimento — todos os pedidos de venda, todos os tempos
@@ -79,12 +87,15 @@ async function getDashboardData(empresaId: string, dataInicio: string) {
     : 100
 
   // Pedidos do período (não cancelados)
-  const { data: pedidosMes } = await supabase
+  let queryPedidos = supabase
     .from('pedidos')
     .select('id, valor_recebido, valor_total, frete_valor, custo_total_pedido, lucro_real, qtd_imas')
     .eq('empresa_id', empresaId)
     .neq('status', 'cancelado')
     .gte('created_at', dataInicio)
+  if (dataFim) queryPedidos = queryPedidos.lt('created_at', dataFim)
+
+  const { data: pedidosMes } = await queryPedidos
 
   const totalPedidosMes = (pedidosMes || []).length
   const faturamentoBruto = (pedidosMes || []).reduce((s, p) => s + Number(p.valor_total ?? 0), 0)
@@ -149,14 +160,37 @@ async function getDashboardData(empresaId: string, dataInicio: string) {
   }
 }
 
+function nomeMes(mes: number, ano: number) {
+  return new Date(ano, mes, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+}
+
+function urlMes(mes: number, ano: number) {
+  return `/dashboard?periodo=mes&mes=${mes}&ano=${ano}`
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; mes?: string; ano?: string }>
 }) {
   const params = await searchParams
   const periodo = (params.periodo || 'mes') as Periodo
-  const dataInicio = getDataInicio(periodo)
+  const hoje = new Date()
+  const mesAtual = hoje.getMonth()
+  const anoAtual = hoje.getFullYear()
+
+  // Mês/ano selecionado (só relevante quando periodo=mes)
+  const mesSel = params.mes !== undefined ? parseInt(params.mes) : mesAtual
+  const anoSel = params.ano !== undefined ? parseInt(params.ano) : anoAtual
+  const ehMesAtual = mesSel === mesAtual && anoSel === anoAtual
+
+  // Mês anterior e próximo para navegação
+  const mesPrev = mesSel === 0 ? 11 : mesSel - 1
+  const anoPrev = mesSel === 0 ? anoSel - 1 : anoSel
+  const mesNext = mesSel === 11 ? 0 : mesSel + 1
+  const anoNext = mesSel === 11 ? anoSel + 1 : anoSel
+
+  const { inicio, fim } = getDatasDoFiltro(periodo, mesSel, anoSel)
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -166,7 +200,7 @@ export default async function DashboardPage({
     .eq('id', user!.id)
     .single()
 
-  const dados = await getDashboardData(usuario!.empresa_id, dataInicio)
+  const dados = await getDashboardData(usuario!.empresa_id, inicio, fim)
   const primeiroNome = usuario?.nome?.split(' ')[0] || 'Leticia'
   const hojeStr = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -205,8 +239,6 @@ export default async function DashboardPage({
                 <p className="text-[10px] text-gray-400">ainda falta recuperar</p>
               </div>
             </div>
-
-            {/* Barra de progresso */}
             <div className="w-full bg-gray-100 rounded-full h-3 mb-2">
               <div
                 className="bg-green-500 h-3 rounded-full transition-all duration-500"
@@ -226,7 +258,7 @@ export default async function DashboardPage({
         {PERIODOS.map(p => (
           <Link
             key={p.key}
-            href={`/dashboard?periodo=${p.key}`}
+            href={p.key === 'mes' ? urlMes(mesAtual, anoAtual) : `/dashboard?periodo=${p.key}`}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold text-center transition-all ${
               periodo === p.key ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'
             }`}
@@ -235,6 +267,32 @@ export default async function DashboardPage({
           </Link>
         ))}
       </div>
+
+      {/* Navegação de meses — só aparece quando período = mes */}
+      {periodo === 'mes' && (
+        <div className="flex items-center gap-2">
+          <Link
+            href={urlMes(mesPrev, anoPrev)}
+            className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+          >
+            <ChevronLeft size={18} className="text-gray-600" />
+          </Link>
+          <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm py-2 px-3 text-center">
+            <p className="text-sm font-semibold text-gray-800 capitalize">{nomeMes(mesSel, anoSel)}</p>
+            {ehMesAtual && <p className="text-[10px] text-green-600">mês atual</p>}
+          </div>
+          <Link
+            href={urlMes(mesNext, anoNext)}
+            className={`w-9 h-9 rounded-xl border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${
+              ehMesAtual
+                ? 'bg-gray-50 border-gray-100 pointer-events-none opacity-30'
+                : 'bg-white border-gray-200'
+            }`}
+          >
+            <ChevronRight size={18} className="text-gray-600" />
+          </Link>
+        </div>
+      )}
 
       {/* Lucro Real — destaque */}
       <div className={`rounded-2xl p-5 border shadow-sm ${dados.lucro_real >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
