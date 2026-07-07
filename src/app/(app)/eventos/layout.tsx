@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { ArrowLeft, LayoutDashboard, Calendar, FileText, Users, Kanban, DollarSign, Package, ClipboardList, BarChart2, Settings } from 'lucide-react'
+import { ArrowLeft, LayoutDashboard, Calendar, FileText, Users, Kanban, DollarSign, Package, ClipboardList, BarChart2, Settings, Calculator } from 'lucide-react'
 
 const MENU = [
   { href: '/eventos', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { href: '/eventos/agenda', icon: Calendar, label: 'Agenda' },
   { href: '/eventos/crm', icon: Kanban, label: 'CRM' },
   { href: '/eventos/orcamentos', icon: FileText, label: 'Orçamentos' },
+  { href: '/eventos/calculadora', icon: Calculator, label: 'Calculadora' },
   { href: '/eventos/clientes', icon: Users, label: 'Clientes' },
   { href: '/eventos/financeiro', icon: DollarSign, label: 'Financeiro' },
   { href: '/eventos/equipamentos', icon: Package, label: 'Equipamentos' },
