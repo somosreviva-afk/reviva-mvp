@@ -161,12 +161,14 @@ function TabEmpresarial() {
   )
 }
 
+type KitItem = { id: number; qtd: number; qtdStr: string; preco: number; precoStr: string }
+
+let nextId = 1
+
 function TabParceria() {
-  const [kitSize, setKitSize] = useState(12)
-  const [kitSizeStr, setKitSizeStr] = useState('12')
-  const [precoKit, setPrecoKit] = useState(64.90)
-  const [precoKitStr, setPrecoKitStr] = useState('64,90')
-  const [clientesMes, setClientesMes] = useState(10)
+  const [kits, setKits] = useState<KitItem[]>([
+    { id: nextId++, qtd: 6, qtdStr: '6', preco: 64.90, precoStr: '64,90' },
+  ])
   const [desconto, setDesconto] = useState(15)
   const [descontoStr, setDescontoStr] = useState('15')
   const [custoIma, setCustoIma] = useState(4.50)
@@ -174,22 +176,23 @@ function TabParceria() {
   const [tipoServico, setTipoServico] = useState('fotógrafo')
   const [gerandoPDF, setGerandoPDF] = useState(false)
 
-  const custoKit = custoIma * kitSize
-  const precoComDesconto = precoKit * (1 - desconto / 100)
-  const lucroKit = precoComDesconto - custoKit
-  const lucroMes = lucroKit * clientesMes
-  const precoUnitario = precoComDesconto / kitSize
-
-  function handleKitSizeInput(val: string) {
-    setKitSizeStr(val)
-    const n = parseInt(val)
-    if (!isNaN(n) && n > 0) setKitSize(n)
+  function addKit() {
+    setKits(k => [...k, { id: nextId++, qtd: 12, qtdStr: '12', preco: 89.90, precoStr: '89,90' }])
   }
-
-  function handlePrecoKitInput(val: string) {
-    setPrecoKitStr(val)
-    const n = parseFloat(val.replace(',', '.'))
-    if (!isNaN(n) && n > 0) setPrecoKit(n)
+  function removeKit(id: number) {
+    setKits(k => k.filter(x => x.id !== id))
+  }
+  function updateKit(id: number, field: 'qtd' | 'preco', raw: string) {
+    setKits(k => k.map(x => {
+      if (x.id !== id) return x
+      if (field === 'qtd') {
+        const n = parseInt(raw)
+        return { ...x, qtdStr: raw, qtd: (!isNaN(n) && n > 0) ? n : x.qtd }
+      } else {
+        const n = parseFloat(raw.replace(',', '.'))
+        return { ...x, precoStr: raw, preco: (!isNaN(n) && n > 0) ? n : x.preco }
+      }
+    }))
   }
 
   function handleDescontoInput(val: string) {
@@ -205,207 +208,176 @@ function TabParceria() {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const W = 210
 
-      // ── HEADER ROSA ──────────────────────────────────────────────
+      // ── HEADER ───────────────────────────────────────────────────
       doc.setFillColor(181, 0, 94)
-      doc.rect(0, 0, W, 42, 'F')
+      doc.rect(0, 0, W, 40, 'F')
 
-      // Faixa branca decorativa
-      doc.setFillColor(255, 255, 255)
-      doc.setGlobalAlpha(0.08)
-      doc.rect(0, 32, W, 6, 'F')
-      doc.setGlobalAlpha(1)
-
-      // Nome da empresa
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(22)
       doc.setTextColor(255, 255, 255)
-      doc.text('Reviva Imãs', 14, 18)
+      doc.text('Reviva Imas', 14, 17)
 
-      // Tagline
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.setTextColor(255, 200, 220)
-      doc.text('Suas memórias, sempre por perto  ·  @somos_reviva', 14, 25)
+      doc.text('Suas memorias, sempre por perto  .  @somos_reviva', 14, 24)
 
-      // Título do documento
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(11)
       doc.setTextColor(255, 230, 240)
-      doc.text('PROPOSTA DE PARCERIA', 14, 36)
+      doc.text('PROPOSTA DE PARCERIA', 14, 35)
 
-      // Data à direita
       const hoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
       doc.setTextColor(255, 200, 220)
-      doc.text(hoje, W - 14, 36, { align: 'right' })
+      doc.text(hoje, W - 14, 35, { align: 'right' })
 
       // ── SAUDAÇÃO ──────────────────────────────────────────────────
-      let y = 54
+      let y = 52
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(13)
       doc.setTextColor(50, 10, 30)
-      const saudacao = nomeParceiro ? `Olá, ${nomeParceiro}!` : 'Olá!'
-      doc.text(saudacao, 14, y)
+      doc.text(nomeParceiro ? `Ola, ${nomeParceiro}!` : 'Ola!', 14, y)
 
       y += 8
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
       doc.setTextColor(80, 40, 60)
-      const intro = doc.splitTextToSize(
-        `Sou a Leticia, da Reviva Imãs. Transformamos fotos em fotoímãs personalizados de alta qualidade — lembranças que os clientes levam para casa e guardam para sempre na geladeira, com carinho e afeto.\n\nVejo uma oportunidade incrível de parceria: você ${tipoServico === 'fotógrafo' ? 'fotógrafo(a)' : tipoServico} oferece aos seus clientes um kit exclusivo de fotoímãs personalizados com as fotos do ensaio, agregando ainda mais valor ao seu trabalho e encantando quem contrata.`,
-        W - 28
-      )
+      const profissao = tipoServico === 'fotógrafo' ? 'fotografo(a)' : tipoServico
+      const introText = `Sou a Leticia, da Reviva Imas. Transformamos fotos em fotoimaos personalizados de alta qualidade - lembrancas que os clientes levam para casa e guardam para sempre.\n\nQuero propor uma parceria: voce ${profissao} oferece aos seus clientes um kit exclusivo de fotoimaos com as fotos do ensaio, agregando ainda mais valor ao seu trabalho.`
+      const intro = doc.splitTextToSize(introText, W - 28)
       doc.text(intro, 14, y)
-      y += intro.length * 5.5 + 4
+      y += intro.length * 5.2 + 6
 
-      // ── CAIXA: COMO FUNCIONA ──────────────────────────────────────
+      // ── COMO FUNCIONA ─────────────────────────────────────────────
       doc.setFillColor(254, 242, 248)
-      doc.roundedRect(14, y, W - 28, 36, 3, 3, 'F')
+      doc.roundedRect(14, y, W - 28, 34, 3, 3, 'F')
       doc.setDrawColor(220, 130, 170)
       doc.setLineWidth(0.3)
-      doc.roundedRect(14, y, W - 28, 36, 3, 3, 'S')
+      doc.roundedRect(14, y, W - 28, 34, 3, 3, 'S')
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
       doc.setTextColor(181, 0, 94)
-      doc.text('✦  COMO FUNCIONA', 20, y + 8)
+      doc.text('COMO FUNCIONA', 20, y + 8)
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.setTextColor(60, 20, 40)
       const comoItems = [
-        `• Kit com ${kitSize} fotoímãs personalizados com as fotos do ensaio`,
-        '• Impressão profissional, materiais de qualidade',
-        '• Organização e entrega sob responsabilidade da Reviva Imãs',
-        '• Você só repassa para o seu cliente — zero trabalho extra',
+        '- Fotoimaos personalizados com as fotos do ensaio',
+        '- Impressao profissional, materiais de qualidade',
+        '- Organizacao e entrega pela Reviva Imas',
+        '- Voce so repassa para o seu cliente, zero trabalho extra',
       ]
-      comoItems.forEach((item, i) => {
-        doc.text(item, 20, y + 16 + i * 5)
-      })
-      y += 44
+      comoItems.forEach((item, i) => doc.text(item, 20, y + 15 + i * 5))
+      y += 42
 
-      // ── CAIXA: INVESTIMENTO ──────────────────────────────────────
+      // ── KITS ─────────────────────────────────────────────────────
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.setTextColor(181, 0, 94)
+      doc.text(`OPCOES DE KIT — ${desconto}% OFF PARA PARCEIROS`, 14, y)
+      y += 5
+
+      // Badge desconto
       doc.setFillColor(181, 0, 94)
-      doc.roundedRect(14, y, W - 28, 42, 3, 3, 'F')
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(255, 210, 230)
-      doc.text('INVESTIMENTO ESPECIAL DE PARCERIA', 20, y + 9)
-
-      // Linha divisória
-      doc.setDrawColor(255, 150, 190)
-      doc.setLineWidth(0.3)
-      doc.line(20, y + 12, W - 20, y + 12)
-
-      // Preço riscado
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(255, 160, 200)
-      const labelDe = `Kit com ${kitSize} ímãs — valor de tabela:`
-      doc.text(labelDe, 20, y + 19)
-      const deStr = fmt(precoKit)
-      doc.text(deStr, W - 20, y + 19, { align: 'right' })
-      // linha de risco no preço antigo
-      const deW = doc.getTextWidth(deStr)
-      doc.setDrawColor(255, 150, 190)
-      doc.setLineWidth(0.25)
-      doc.line(W - 20 - deW, y + 18.3, W - 20, y + 18.3)
-
-      // Desconto badge
-      doc.setFillColor(255, 220, 240)
-      doc.roundedRect(20, y + 22, 38, 7, 2, 2, 'F')
+      doc.roundedRect(14, y, 52, 8, 2, 2, 'F')
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8)
-      doc.setTextColor(181, 0, 94)
-      doc.text(`${desconto}% DE DESCONTO`, 39, y + 27, { align: 'center' })
-
-      // Preço final
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(18)
       doc.setTextColor(255, 255, 255)
-      doc.text(fmt(precoComDesconto), W - 20, y + 29, { align: 'right' })
+      doc.text(`${desconto}% DE DESCONTO`, 40, y + 5.5, { align: 'center' })
+      y += 14
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.setTextColor(255, 210, 230)
-      doc.text(`(${fmt(precoUnitario)} por ímã)`, W - 20, y + 36, { align: 'right' })
+      kits.forEach((kit) => {
+        const precoComDesc = kit.preco * (1 - desconto / 100)
+        const precoUnit = precoComDesc / kit.qtd
 
-      y += 50
+        doc.setFillColor(255, 247, 251)
+        doc.roundedRect(14, y, W - 28, 24, 3, 3, 'F')
+        doc.setDrawColor(240, 180, 210)
+        doc.setLineWidth(0.3)
+        doc.roundedRect(14, y, W - 28, 24, 3, 3, 'S')
 
-      // ── ESTIMATIVA DE RECEITA ──────────────────────────────────────
-      doc.setFillColor(240, 253, 244)
-      doc.roundedRect(14, y, W - 28, 28, 3, 3, 'F')
-      doc.setDrawColor(134, 239, 172)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(14, y, W - 28, 28, 3, 3, 'S')
+        // Título do kit
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        doc.setTextColor(80, 20, 50)
+        doc.text(`Kit ${kit.qtd} fotoimaos`, 20, y + 8)
 
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(22, 101, 52)
-      doc.text('✦  POTENCIAL COM ' + clientesMes + ' CLIENTES/MÊS', 20, y + 8)
+        // Preço de tabela riscado
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8)
+        doc.setTextColor(180, 120, 150)
+        const tabelaStr = `De: ${fmt(kit.preco)}`
+        doc.text(tabelaStr, 20, y + 15)
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(21, 128, 61)
-      doc.text(`Receita mensal gerada:`, 20, y + 16)
-      doc.setFont('helvetica', 'bold')
-      doc.text(fmt(precoComDesconto * clientesMes), W - 20, y + 16, { align: 'right' })
+        // Linha de risco
+        const tW = doc.getTextWidth(tabelaStr)
+        doc.setDrawColor(180, 120, 150)
+        doc.setLineWidth(0.3)
+        doc.line(20, y + 14.3, 20 + tW, y + 14.3)
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7.5)
-      doc.setTextColor(74, 222, 128)
-      doc.text('Um diferencial que pouquíssimos profissionais oferecem aos seus clientes.', 20, y + 22)
+        // Preço parceiro
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(14)
+        doc.setTextColor(181, 0, 94)
+        doc.text(fmt(precoComDesc), W - 20, y + 10, { align: 'right' })
 
-      y += 36
+        // Preço por imã
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.setTextColor(140, 80, 110)
+        doc.text(`${fmt(precoUnit)} por ima`, W - 20, y + 17, { align: 'right' })
 
-      // ── PRÓXIMOS PASSOS ──────────────────────────────────────────
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(181, 0, 94)
-      doc.text('PRÓXIMOS PASSOS', 14, y)
-      y += 6
+        // "Por parceiro"
+        doc.setFont('helvetica', 'italic')
+        doc.setFontSize(7)
+        doc.setTextColor(181, 0, 94)
+        doc.text('preco parceiro', W - 20, y + 22, { align: 'right' })
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-      doc.setTextColor(60, 20, 40)
-      const passos = [
-        '1. Me confirme o interesse e vamos alinhar os detalhes',
-        '2. Você me envia as fotos do ensaio após cada sessão',
-        '3. Produzimos e entregamos o kit no prazo combinado',
-        '4. Seu cliente recebe uma surpresa incrível!',
-      ]
-      passos.forEach((p, i) => {
-        doc.text(p, 14, y + i * 5.5)
+        y += 30
       })
-      y += 30
+
+      y += 4
+
+      // ── MENSAGEM SIMPLES ─────────────────────────────────────────
+      doc.setFillColor(245, 240, 248)
+      doc.roundedRect(14, y, W - 28, 22, 3, 3, 'F')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(60, 20, 50)
+      const msgText = doc.splitTextToSize(`Como parceiro(a), voce tem ${desconto}% de desconto em todos os kits. Basta me avisar apos cada sessao e cuidamos de tudo!`, W - 36)
+      doc.text(msgText, 20, y + 8)
+      y += 28
 
       // ── RODAPÉ ──────────────────────────────────────────────────
+      y = Math.max(y, 252)
       doc.setFillColor(245, 240, 248)
       doc.rect(0, y, W, 30, 'F')
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(10)
       doc.setTextColor(181, 0, 94)
-      doc.text('Reviva Imãs', 14, y + 10)
+      doc.text('Reviva Imas', 14, y + 10)
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
       doc.setTextColor(100, 60, 80)
-      doc.text('📸  @somos_reviva', 14, y + 17)
-      doc.text('💌  loubrleticia@gmail.com', 14, y + 23)
+      doc.text('@somos_reviva', 14, y + 17)
+      doc.text('loubrleticia@gmail.com', 14, y + 23)
 
       doc.setFont('helvetica', 'italic')
-      doc.setFontSize(7.5)
+      doc.setFontSize(8)
       doc.setTextColor(181, 0, 94)
-      doc.text('Suas memórias, sempre por perto 🌸', W - 14, y + 17, { align: 'right' })
+      doc.text('Suas memorias, sempre por perto', W - 14, y + 17, { align: 'right' })
 
       const nomeArq = `proposta-parceria${nomeParceiro ? '-' + nomeParceiro.toLowerCase().replace(/\s+/g, '-') : ''}.pdf`
       doc.save(nomeArq)
     } catch (err) {
       console.error('Erro ao gerar PDF:', err)
-      alert('Não foi possível gerar o PDF. Tente novamente.')
+      alert('Erro ao gerar o PDF: ' + String(err))
     } finally {
       setGerandoPDF(false)
     }
@@ -413,130 +385,109 @@ function TabParceria() {
 
   return (
     <div className="space-y-4">
-      {/* Config da parceria */}
+      {/* Desconto global */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-700">Configuração da parceria</h2>
-
-        {/* Kit size - LIVRE */}
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1.5">Quantidade de ímãs por cliente</label>
-          <div className="flex items-center gap-3">
+        <h2 className="text-sm font-semibold text-gray-700">Desconto para o parceiro</h2>
+        <div className="flex items-center gap-3">
+          <div className="relative">
             <input
-              type="number"
-              min={1}
-              value={kitSizeStr}
-              onChange={e => handleKitSizeInput(e.target.value)}
-              className="w-24 border-2 border-pink-200 focus:border-pink-500 rounded-xl px-3 py-2 text-base font-bold text-pink-700 text-center focus:outline-none"
-              placeholder="12"
+              type="number" min={1} max={99}
+              value={descontoStr}
+              onChange={e => handleDescontoInput(e.target.value)}
+              className="w-20 border-2 border-pink-200 focus:border-pink-500 rounded-xl px-3 py-2 text-xl font-bold text-pink-700 text-center focus:outline-none pr-5"
+              placeholder="15"
             />
-            <span className="text-sm text-gray-500 flex-1">ímãs por cliente</span>
-            <div className="flex gap-1.5">
-              {[6, 9, 12, 15].map(k => (
-                <button key={k} onClick={() => { setKitSize(k); setKitSizeStr(String(k)) }}
-                  className={`w-9 h-9 rounded-lg border text-xs font-bold transition-all ${
-                    kitSize === k ? 'bg-pink-600 text-white border-pink-600' : 'bg-gray-50 border-gray-200 text-gray-500'
-                  }`}>
-                  {k}
-                </button>
-              ))}
-            </div>
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-pink-500 font-bold">%</span>
+          </div>
+          <div className="flex-1">
+            <input type="range" min={5} max={50} step={1} value={Math.min(desconto, 50)}
+              onChange={e => { const v = Number(e.target.value); setDesconto(v); setDescontoStr(String(v)) }}
+              className="w-full accent-pink-600" />
+            <div className="flex justify-between text-[10px] text-gray-400"><span>5%</span><span>50%</span></div>
           </div>
         </div>
-
-        {/* Preço do kit (valor de tabela) */}
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1.5">Preço do kit (valor de tabela)</label>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-500">R$</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={precoKitStr}
-              onChange={e => handlePrecoKitInput(e.target.value)}
-              className="w-32 border-2 border-pink-200 focus:border-pink-500 rounded-xl px-3 py-2 text-base font-bold text-pink-700 text-center focus:outline-none"
-              placeholder="64,90"
-            />
-            <span className="text-xs text-gray-400">por kit de {kitSize} ímãs</span>
-          </div>
-          <p className="text-[10px] text-gray-400 mt-1">Este é o preço cheio. O desconto será aplicado sobre ele.</p>
-        </div>
-
-        {/* Custo unitário (interno) */}
-        <div>
-          <div className="flex justify-between mb-1">
-            <label className="text-xs font-medium text-gray-600">Seu custo por ímã (interno)</label>
-            <span className="text-sm font-bold text-gray-500">{fmt(custoIma)}</span>
-          </div>
-          <input type="range" min={2} max={8} step={0.25} value={custoIma}
-            onChange={e => setCustoIma(Number(e.target.value))}
-            className="w-full accent-gray-400" />
-          <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>R$2,00</span><span>R$8,00</span></div>
-        </div>
-
-        {/* Desconto - LIVRE */}
-        <div>
-          <label className="text-xs font-medium text-gray-600 block mb-1.5">Desconto para o parceiro</label>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="relative">
-              <input
-                type="number"
-                min={1}
-                max={99}
-                value={descontoStr}
-                onChange={e => handleDescontoInput(e.target.value)}
-                className="w-20 border-2 border-pink-200 focus:border-pink-500 rounded-xl px-3 py-2 text-base font-bold text-pink-700 text-center focus:outline-none pr-6"
-                placeholder="15"
-              />
-              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-pink-500 font-bold text-sm">%</span>
-            </div>
-            <span className="text-xs text-gray-400 flex-1">Digite o % de desconto</span>
-          </div>
-          <input type="range" min={5} max={50} step={1} value={Math.min(desconto, 50)}
-            onChange={e => { const v = Number(e.target.value); setDesconto(v); setDescontoStr(String(v)) }}
-            className="w-full accent-pink-600" />
-          <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>5%</span><span>50%</span></div>
-        </div>
-
-        {/* Clientes por mês */}
-        <div>
-          <div className="flex justify-between mb-1">
-            <label className="text-xs font-medium text-gray-600">Clientes/mês (estimativa)</label>
-            <span className="text-sm font-bold text-pink-700">{clientesMes} clientes</span>
-          </div>
-          <input type="range" min={1} max={50} step={1} value={clientesMes}
-            onChange={e => setClientesMes(Number(e.target.value))}
-            className="w-full accent-pink-600" />
-          <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>1</span><span>50</span></div>
-        </div>
+        <p className="text-xs text-gray-400">Este desconto será aplicado em todos os kits da proposta.</p>
       </div>
 
-      {/* Resultados */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
-          <p className="text-xs text-orange-600 font-medium">Seu custo por kit</p>
-          <p className="text-xl font-bold text-orange-700 mt-1">{fmt(custoKit)}</p>
-          <p className="text-[10px] text-orange-400 mt-0.5">{kitSize} ímãs × {fmt(custoIma)}</p>
+      {/* Kits */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Kits da proposta</h2>
+          <button onClick={addKit}
+            className="text-xs bg-pink-100 text-pink-700 px-3 py-1.5 rounded-lg font-semibold">
+            + Adicionar kit
+          </button>
         </div>
-        <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4">
-          <p className="text-xs text-pink-600 font-medium">Preço com {desconto}% off</p>
-          <p className="text-xl font-bold text-pink-700 mt-1">{fmt(precoComDesconto)}</p>
-          <p className="text-[10px] text-pink-400 mt-0.5 line-through">{fmt(precoKit)}</p>
+
+        {kits.map(kit => {
+          const precoComDesc = kit.preco * (1 - desconto / 100)
+          return (
+            <div key={kit.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 font-medium">Qtd de ímãs</label>
+                  <input
+                    type="number" min={1}
+                    value={kit.qtdStr}
+                    onChange={e => updateKit(kit.id, 'qtd', e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-pink-700 text-center focus:outline-none focus:border-pink-400 bg-white mt-0.5"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-500 font-medium">Preço de tabela</label>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className="text-xs text-gray-400">R$</span>
+                    <input
+                      type="text" inputMode="decimal"
+                      value={kit.precoStr}
+                      onChange={e => updateKit(kit.id, 'preco', e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-700 text-center focus:outline-none focus:border-pink-400 bg-white"
+                    />
+                  </div>
+                </div>
+                {kits.length > 1 && (
+                  <button onClick={() => removeKit(kit.id)}
+                    className="text-gray-300 text-lg font-light leading-none pb-0.5 self-end mb-1">✕</button>
+                )}
+              </div>
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] text-gray-400 line-through">{fmt(kit.preco)}</span>
+                <span className="text-sm font-bold text-pink-700">{fmt(precoComDesc)}</span>
+                <span className="text-[10px] text-green-600 font-medium">{desconto}% off</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Custo interno */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div className="flex justify-between mb-1">
+          <label className="text-xs font-medium text-gray-500">Seu custo por ímã (interno)</label>
+          <span className="text-sm font-bold text-gray-500">{fmt(custoIma)}</span>
         </div>
-        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
-          <p className="text-xs text-gray-500 font-medium">Preço por ímã</p>
-          <p className="text-xl font-bold text-gray-700 mt-1">{fmt(precoUnitario)}</p>
-        </div>
-        <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
-          <p className="text-xs text-green-600 font-medium">Lucro estimado/mês</p>
-          <p className="text-xl font-bold text-green-700 mt-1">{fmt(lucroMes)}</p>
-          <p className="text-[10px] text-green-400 mt-0.5">{fmt(lucroKit)} por kit</p>
+        <input type="range" min={2} max={8} step={0.25} value={custoIma}
+          onChange={e => setCustoIma(Number(e.target.value))}
+          className="w-full accent-gray-400" />
+        <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>R$2,00</span><span>R$8,00</span></div>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          {kits.map(kit => {
+            const custo = custoIma * kit.qtd
+            const venda = kit.preco * (1 - desconto / 100)
+            const lucro = venda - custo
+            return (
+              <div key={kit.id} className="bg-green-50 rounded-xl p-2.5 border border-green-100">
+                <p className="text-[10px] text-green-600">Lucro kit {kit.qtd} ímãs</p>
+                <p className="text-sm font-bold text-green-700">{fmt(lucro)}</p>
+              </div>
+            )
+          })}
         </div>
       </div>
 
       {/* Gerar PDF */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">📄 Proposta em PDF</h2>
-
+        <h2 className="text-sm font-semibold text-gray-700">Proposta em PDF</h2>
         <div>
           <label className="text-xs font-medium text-gray-500 block mb-1">Nome do parceiro (opcional)</label>
           <input
@@ -546,9 +497,8 @@ function TabParceria() {
             onChange={e => setNomeParceiro(e.target.value)}
           />
         </div>
-
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Tipo de serviço do parceiro</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">Tipo de serviço</label>
           <div className="flex gap-2 flex-wrap">
             {['fotógrafo', 'fotógrafa', 'videomaker', 'outro'].map(t => (
               <button key={t} onClick={() => setTipoServico(t)}
@@ -560,16 +510,6 @@ function TabParceria() {
             ))}
           </div>
         </div>
-
-        <div className="bg-pink-50 rounded-xl p-3 border border-pink-100">
-          <p className="text-xs text-pink-700 font-medium mb-1">O PDF vai incluir:</p>
-          <p className="text-[11px] text-pink-600 leading-relaxed">
-            Header Reviva Imãs · Saudação personalizada · Como funciona ·
-            Kit de {kitSize} ímãs · tabela {fmt(precoKit)} → parceiro {fmt(precoComDesconto)} ({desconto}% off) ·
-            Estimativa com {clientesMes} clientes/mês · Próximos passos · Rodapé com contato
-          </p>
-        </div>
-
         <button
           onClick={gerarPDF}
           disabled={gerandoPDF}
