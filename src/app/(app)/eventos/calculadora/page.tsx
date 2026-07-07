@@ -215,12 +215,12 @@ function TabParceria() {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(22)
       doc.setTextColor(255, 255, 255)
-      doc.text('Reviva Imas', 14, 17)
+      doc.text('Reviva Im\xe3s', 14, 17)
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8.5)
       doc.setTextColor(255, 200, 220)
-      doc.text('Suas memorias, sempre por perto  .  @somos_reviva', 14, 24)
+      doc.text('Suas mem\xf3rias, sempre por perto  |  @somos_reviva', 14, 24)
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(11)
@@ -238,24 +238,38 @@ function TabParceria() {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(13)
       doc.setTextColor(50, 10, 30)
-      doc.text(nomeParceiro ? `Ola, ${nomeParceiro}!` : 'Ola!', 14, y)
+      doc.text(nomeParceiro ? `Ol\xe1, ${nomeParceiro}!` : 'Ol\xe1!', 14, y)
 
       y += 8
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9.5)
-      doc.setTextColor(80, 40, 60)
-      const profissao = tipoServico === 'fotógrafo' ? 'fotografo(a)' : tipoServico
-      const introText = `Sou a Leticia, da Reviva Imas. Transformamos fotos em fotoimaos personalizados de alta qualidade - lembrancas que os clientes levam para casa e guardam para sempre.\n\nQuero propor uma parceria: voce ${profissao} oferece aos seus clientes um kit exclusivo de fotoimaos com as fotos do ensaio, agregando ainda mais valor ao seu trabalho.`
-      const intro = doc.splitTextToSize(introText, W - 28)
-      doc.text(intro, 14, y)
-      y += intro.length * 5.2 + 6
+      doc.setTextColor(70, 30, 50)
+
+      const profLabel = tipoServico === 'fotógrafo' ? 'fot\xf3grafo(a)'
+        : tipoServico === 'fotógrafa' ? 'fot\xf3grafa'
+        : tipoServico === 'videomaker' ? 'videomaker'
+        : 'parceiro(a)'
+
+      const p1 = doc.splitTextToSize(
+        `Sou a Leticia, da Reviva Im\xe3s. Somos especializados em fotoím\xe3s personalizados de alta qualidade \x97 aquelas lembran\xe7as lindas que ficam na geladeira e encantam todo mundo que passa pela casa.`,
+        W - 28
+      )
+      doc.text(p1, 14, y)
+      y += p1.length * 5.4 + 4
+
+      const p2 = doc.splitTextToSize(
+        `Tenho uma proposta especial para voc\xea: como ${profLabel}, voc\xea pode oferecer aos seus clientes, ao final de cada sess\xe3o, um kit de fotoím\xe3s exclusivos feitos com as pr\xf3prias fotos do ensaio. Um diferencial afetivo que pouqu\xedssimos profissionais oferecem e que os clientes jamais esquecem.`,
+        W - 28
+      )
+      doc.text(p2, 14, y)
+      y += p2.length * 5.4 + 8
 
       // ── COMO FUNCIONA ─────────────────────────────────────────────
       doc.setFillColor(254, 242, 248)
-      doc.roundedRect(14, y, W - 28, 34, 3, 3, 'F')
+      doc.roundedRect(14, y, W - 28, 36, 3, 3, 'F')
       doc.setDrawColor(220, 130, 170)
       doc.setLineWidth(0.3)
-      doc.roundedRect(14, y, W - 28, 34, 3, 3, 'S')
+      doc.roundedRect(14, y, W - 28, 36, 3, 3, 'S')
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(9)
@@ -266,91 +280,84 @@ function TabParceria() {
       doc.setFontSize(8.5)
       doc.setTextColor(60, 20, 40)
       const comoItems = [
-        '- Fotoimaos personalizados com as fotos do ensaio',
-        '- Impressao profissional, materiais de qualidade',
-        '- Organizacao e entrega pela Reviva Imas',
-        '- Voce so repassa para o seu cliente, zero trabalho extra',
+        'Voc\xea me envia as fotos ap\xf3s a sess\xe3o',
+        'N\xf3s produzimos os fotoím\xe3s com impress\xe3o profissional',
+        'Entregamos organizados e prontos para presentear',
+        'Voc\xea s\xf3 repassa ao cliente \x97 zero trabalho extra para voc\xea',
       ]
-      comoItems.forEach((item, i) => doc.text(item, 20, y + 15 + i * 5))
-      y += 42
+      comoItems.forEach((item, i) => {
+        doc.text(`${i + 1}.  ${item}`, 20, y + 16 + i * 5.5)
+      })
+      y += 44
 
       // ── KITS ─────────────────────────────────────────────────────
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(10)
       doc.setTextColor(181, 0, 94)
-      doc.text(`OPCOES DE KIT — ${desconto}% OFF PARA PARCEIROS`, 14, y)
-      y += 5
-
-      // Badge desconto
-      doc.setFillColor(181, 0, 94)
-      doc.roundedRect(14, y, 52, 8, 2, 2, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(255, 255, 255)
-      doc.text(`${desconto}% DE DESCONTO`, 40, y + 5.5, { align: 'center' })
-      y += 14
+      doc.text(`OP\xc7\xd5ES DE KIT  \x97  ${desconto}% DE DESCONTO PARA PARCEIROS`, 14, y)
+      y += 12
 
       kits.forEach((kit) => {
         const precoComDesc = kit.preco * (1 - desconto / 100)
         const precoUnit = precoComDesc / kit.qtd
 
         doc.setFillColor(255, 247, 251)
-        doc.roundedRect(14, y, W - 28, 24, 3, 3, 'F')
+        doc.roundedRect(14, y, W - 28, 26, 3, 3, 'F')
         doc.setDrawColor(240, 180, 210)
         doc.setLineWidth(0.3)
-        doc.roundedRect(14, y, W - 28, 24, 3, 3, 'S')
+        doc.roundedRect(14, y, W - 28, 26, 3, 3, 'S')
 
-        // Título do kit
+        // Título
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(10)
         doc.setTextColor(80, 20, 50)
-        doc.text(`Kit ${kit.qtd} fotoimaos`, 20, y + 8)
+        doc.text(`Kit ${kit.qtd} fotoím\xe3s`, 20, y + 9)
 
         // Preço de tabela riscado
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(8)
         doc.setTextColor(180, 120, 150)
-        const tabelaStr = `De: ${fmt(kit.preco)}`
-        doc.text(tabelaStr, 20, y + 15)
-
-        // Linha de risco
+        const tabelaStr = `Valor de tabela: ${fmt(kit.preco)}`
+        doc.text(tabelaStr, 20, y + 17)
         const tW = doc.getTextWidth(tabelaStr)
         doc.setDrawColor(180, 120, 150)
         doc.setLineWidth(0.3)
-        doc.line(20, y + 14.3, 20 + tW, y + 14.3)
+        doc.line(20, y + 16.3, 20 + tW, y + 16.3)
 
         // Preço parceiro
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(14)
+        doc.setFontSize(15)
         doc.setTextColor(181, 0, 94)
-        doc.text(fmt(precoComDesc), W - 20, y + 10, { align: 'right' })
+        doc.text(fmt(precoComDesc), W - 20, y + 11, { align: 'right' })
 
-        // Preço por imã
+        // Por ímã
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(7.5)
         doc.setTextColor(140, 80, 110)
-        doc.text(`${fmt(precoUnit)} por ima`, W - 20, y + 17, { align: 'right' })
+        doc.text(`${fmt(precoUnit)} por fotoím\xe3`, W - 20, y + 18, { align: 'right' })
 
-        // "Por parceiro"
         doc.setFont('helvetica', 'italic')
         doc.setFontSize(7)
         doc.setTextColor(181, 0, 94)
-        doc.text('preco parceiro', W - 20, y + 22, { align: 'right' })
+        doc.text('pre\xe7o parceiro', W - 20, y + 23, { align: 'right' })
 
-        y += 30
+        y += 32
       })
 
-      y += 4
+      y += 2
 
-      // ── MENSAGEM SIMPLES ─────────────────────────────────────────
+      // ── MENSAGEM FINAL ───────────────────────────────────────────
       doc.setFillColor(245, 240, 248)
-      doc.roundedRect(14, y, W - 28, 22, 3, 3, 'F')
+      doc.roundedRect(14, y, W - 28, 26, 3, 3, 'F')
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(9)
       doc.setTextColor(60, 20, 50)
-      const msgText = doc.splitTextToSize(`Como parceiro(a), voce tem ${desconto}% de desconto em todos os kits. Basta me avisar apos cada sessao e cuidamos de tudo!`, W - 36)
-      doc.text(msgText, 20, y + 8)
-      y += 28
+      const msg = doc.splitTextToSize(
+        `Como parceiro(a) da Reviva Im\xe3s, voc\xea tem ${desconto}% de desconto em todos os kits. Basta me avisar ap\xf3s cada sess\xe3o \x97 o restante fica por nossa conta!`,
+        W - 36
+      )
+      doc.text(msg, 20, y + 9)
+      y += 32
 
       // ── RODAPÉ ──────────────────────────────────────────────────
       y = Math.max(y, 252)
@@ -360,18 +367,18 @@ function TabParceria() {
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(10)
       doc.setTextColor(181, 0, 94)
-      doc.text('Reviva Imas', 14, y + 10)
+      doc.text('Reviva Im\xe3s', 14, y + 10)
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(8)
       doc.setTextColor(100, 60, 80)
-      doc.text('@somos_reviva', 14, y + 17)
-      doc.text('loubrleticia@gmail.com', 14, y + 23)
+      doc.text('Instagram: @somos_reviva', 14, y + 17)
+      doc.text('E-mail: somosreviva@gmail.com', 14, y + 23)
 
       doc.setFont('helvetica', 'italic')
       doc.setFontSize(8)
       doc.setTextColor(181, 0, 94)
-      doc.text('Suas memorias, sempre por perto', W - 14, y + 17, { align: 'right' })
+      doc.text('Suas mem\xf3rias, sempre por perto', W - 14, y + 17, { align: 'right' })
 
       const nomeArq = `proposta-parceria${nomeParceiro ? '-' + nomeParceiro.toLowerCase().replace(/\s+/g, '-') : ''}.pdf`
       doc.save(nomeArq)
