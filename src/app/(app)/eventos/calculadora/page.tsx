@@ -245,24 +245,12 @@ function TabParceria() {
       doc.setFontSize(9.5)
       doc.setTextColor(70, 30, 50)
 
-      const profLabel = tipoServico === 'fotógrafo' ? 'fot\xf3grafo(a)'
-        : tipoServico === 'fotógrafa' ? 'fot\xf3grafa'
-        : tipoServico === 'videomaker' ? 'videomaker'
-        : 'parceiro(a)'
-
       const p1 = doc.splitTextToSize(
-        `Sou a Leticia, da Reviva Im\xe3s. Somos especializados em fotoím\xe3s personalizados de alta qualidade \x97 aquelas lembran\xe7as lindas que ficam na geladeira e encantam todo mundo que passa pela casa.`,
+        `Aqui \xe9 a Ana e a Leticia, da Reviva Im\xe3s. Realizamos fotoím\xe3s personalizados e estamos enviando nossa proposta de parceria para voc\xea.`,
         W - 28
       )
       doc.text(p1, 14, y)
-      y += p1.length * 5.4 + 4
-
-      const p2 = doc.splitTextToSize(
-        `Tenho uma proposta especial para voc\xea: como ${profLabel}, voc\xea pode oferecer aos seus clientes, ao final de cada sess\xe3o, um kit de fotoím\xe3s exclusivos feitos com as pr\xf3prias fotos do ensaio. Um diferencial afetivo que pouqu\xedssimos profissionais oferecem e que os clientes jamais esquecem.`,
-        W - 28
-      )
-      doc.text(p2, 14, y)
-      y += p2.length * 5.4 + 8
+      y += p1.length * 5.4 + 8
 
       // ── COMO FUNCIONA ─────────────────────────────────────────────
       doc.setFillColor(254, 242, 248)
