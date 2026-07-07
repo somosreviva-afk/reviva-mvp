@@ -164,6 +164,8 @@ function TabEmpresarial() {
 function TabParceria() {
   const [kitSize, setKitSize] = useState(12)
   const [kitSizeStr, setKitSizeStr] = useState('12')
+  const [precoKit, setPrecoKit] = useState(64.90)
+  const [precoKitStr, setPrecoKitStr] = useState('64,90')
   const [clientesMes, setClientesMes] = useState(10)
   const [desconto, setDesconto] = useState(15)
   const [descontoStr, setDescontoStr] = useState('15')
@@ -173,8 +175,7 @@ function TabParceria() {
   const [gerandoPDF, setGerandoPDF] = useState(false)
 
   const custoKit = custoIma * kitSize
-  const precoSemDesconto = custoKit / (1 - 0.50)
-  const precoComDesconto = precoSemDesconto * (1 - desconto / 100)
+  const precoComDesconto = precoKit * (1 - desconto / 100)
   const lucroKit = precoComDesconto - custoKit
   const lucroMes = lucroKit * clientesMes
   const precoUnitario = precoComDesconto / kitSize
@@ -183,6 +184,12 @@ function TabParceria() {
     setKitSizeStr(val)
     const n = parseInt(val)
     if (!isNaN(n) && n > 0) setKitSize(n)
+  }
+
+  function handlePrecoKitInput(val: string) {
+    setPrecoKitStr(val)
+    const n = parseFloat(val.replace(',', '.'))
+    if (!isNaN(n) && n > 0) setPrecoKit(n)
   }
 
   function handleDescontoInput(val: string) {
@@ -298,7 +305,7 @@ function TabParceria() {
       doc.setTextColor(255, 160, 200)
       const labelDe = `Kit com ${kitSize} ímãs — valor de tabela:`
       doc.text(labelDe, 20, y + 19)
-      const deStr = fmt(precoSemDesconto)
+      const deStr = fmt(precoKit)
       doc.text(deStr, W - 20, y + 19, { align: 'right' })
       // linha de risco no preço antigo
       const deW = doc.getTextWidth(deStr)
@@ -436,15 +443,33 @@ function TabParceria() {
           </div>
         </div>
 
-        {/* Custo unitário */}
+        {/* Preço do kit (valor de tabela) */}
+        <div>
+          <label className="text-xs font-medium text-gray-600 block mb-1.5">Preço do kit (valor de tabela)</label>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-500">R$</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={precoKitStr}
+              onChange={e => handlePrecoKitInput(e.target.value)}
+              className="w-32 border-2 border-pink-200 focus:border-pink-500 rounded-xl px-3 py-2 text-base font-bold text-pink-700 text-center focus:outline-none"
+              placeholder="64,90"
+            />
+            <span className="text-xs text-gray-400">por kit de {kitSize} ímãs</span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">Este é o preço cheio. O desconto será aplicado sobre ele.</p>
+        </div>
+
+        {/* Custo unitário (interno) */}
         <div>
           <div className="flex justify-between mb-1">
-            <label className="text-xs font-medium text-gray-600">Custo unitário do ímã</label>
-            <span className="text-sm font-bold text-pink-700">{fmt(custoIma)}</span>
+            <label className="text-xs font-medium text-gray-600">Seu custo por ímã (interno)</label>
+            <span className="text-sm font-bold text-gray-500">{fmt(custoIma)}</span>
           </div>
           <input type="range" min={2} max={8} step={0.25} value={custoIma}
             onChange={e => setCustoIma(Number(e.target.value))}
-            className="w-full accent-pink-600" />
+            className="w-full accent-gray-400" />
           <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>R$2,00</span><span>R$8,00</span></div>
         </div>
 
@@ -495,7 +520,7 @@ function TabParceria() {
         <div className="bg-pink-50 border border-pink-100 rounded-2xl p-4">
           <p className="text-xs text-pink-600 font-medium">Preço com {desconto}% off</p>
           <p className="text-xl font-bold text-pink-700 mt-1">{fmt(precoComDesconto)}</p>
-          <p className="text-[10px] text-pink-400 mt-0.5 line-through">{fmt(precoSemDesconto)}</p>
+          <p className="text-[10px] text-pink-400 mt-0.5 line-through">{fmt(precoKit)}</p>
         </div>
         <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
           <p className="text-xs text-gray-500 font-medium">Preço por ímã</p>
@@ -540,7 +565,7 @@ function TabParceria() {
           <p className="text-xs text-pink-700 font-medium mb-1">O PDF vai incluir:</p>
           <p className="text-[11px] text-pink-600 leading-relaxed">
             Header Reviva Imãs · Saudação personalizada · Como funciona ·
-            Kit de {kitSize} ímãs com desconto de {desconto}% ({fmt(precoComDesconto)}) ·
+            Kit de {kitSize} ímãs · tabela {fmt(precoKit)} → parceiro {fmt(precoComDesconto)} ({desconto}% off) ·
             Estimativa com {clientesMes} clientes/mês · Próximos passos · Rodapé com contato
           </p>
         </div>
