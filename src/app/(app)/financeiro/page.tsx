@@ -64,6 +64,7 @@ export default async function FinanceiroPage({
     { data: todosPedidos },
     { data: todasCompras },
     { data: todasTransacoes },
+    { data: todosCustosProducao },
   ] = await Promise.all([
     supabase.from('pedidos')
       .select('id, created_at, valor_recebido, valor_total, custo_total_pedido, tipo, forma_pagamento')
@@ -75,6 +76,10 @@ export default async function FinanceiroPage({
       .order('data', { ascending: true }),
     supabase.from('financeiro')
       .select('id, data, tipo, valor, descricao, categoria')
+      .eq('empresa_id', empresaId)
+      .order('data', { ascending: true }),
+    supabase.from('custos_producao')
+      .select('id, data, descricao, valor')
       .eq('empresa_id', empresaId)
       .order('data', { ascending: true }),
   ])
@@ -107,6 +112,14 @@ export default async function FinanceiroPage({
       tipo: t.tipo as 'entrada' | 'saida',
       valor: Number(t.valor || 0),
     })),
+    ...(todosCustosProducao || []).map(c => ({
+      key: `cp-${c.id}`,
+      data: c.data + 'T00:00:00.000Z',
+      descricao: c.descricao,
+      categoria: 'Custo de produção',
+      tipo: 'saida' as const,
+      valor: Number(c.valor || 0),
+    })),
   ]
 
   raw.sort((a, b) => a.data.localeCompare(b.data))
@@ -126,7 +139,8 @@ export default async function FinanceiroPage({
   const saidasGeral    = raw.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
   const custoProdGeral = (todosPedidos || []).reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
   const saidasManuaisGeral = (todasTransacoes || []).filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
-  const lucroAcumulado = receitaGeral - custoProdGeral - saidasManuaisGeral
+  const totalCustosProducaoGeral = (todosCustosProducao || []).reduce((s, c) => s + Number(c.valor), 0)
+  const lucroAcumulado = receitaGeral - custoProdGeral - saidasManuaisGeral - totalCustosProducaoGeral
 
   // ── MÊS SELECIONADO ──────────────────────────────────────────────
   const movimentosMes = allMovimentos.filter(m => {

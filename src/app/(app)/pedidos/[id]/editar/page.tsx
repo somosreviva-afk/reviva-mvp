@@ -107,8 +107,8 @@ export default function EditarPedidoPage() {
           envelope_custo: Number(cfg.envelope_custo),
           papel_seda_custo: Number(cfg.papel_seda_custo),
           cartao_custo: Number(cfg.cartao_custo),
-          impressao_valor_folha: Number(cfg.impressao_valor_folha),
-          impressao_fotos_por_folha: Number(cfg.impressao_fotos_por_folha),
+          adesivo_caixa_custo: Number(cfg.adesivo_caixa_custo || 0.32),
+          lacre_caixa_custo: Number(cfg.lacre_caixa_custo || 0.27),
         })
       }
 
@@ -173,7 +173,6 @@ export default function EditarPedidoPage() {
       qtd_embrulhos: qtdEmbrulhos,
       qtd_imas: custos.qtd_imas,
       custo_imas: custos.custo_imas,
-      custo_impressao: custos.custo_impressao,
       custo_saquinhos: custos.custo_saquinhos,
       custo_caixa: custos.custo_caixa,
       custo_envelope: custos.custo_envelope,
@@ -469,7 +468,6 @@ export default function EditarPedidoPage() {
               <div className="space-y-1.5">
                 {[
                   { label: 'Ímãs', val: custos.custo_imas },
-                  { label: 'Impressão', val: custos.custo_impressao },
                   { label: 'Saquinhos', val: custos.custo_saquinhos },
                   { label: 'Caixa', val: custos.custo_caixa },
                   { label: 'Envelope', val: custos.custo_envelope },

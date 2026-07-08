@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { LogOut, Building2, ChevronRight, Package, Printer } from 'lucide-react'
+import { LogOut, Building2, ChevronRight, Package } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
 
@@ -39,8 +39,8 @@ export default function ConfiguracoesPage() {
           envelope_custo: Number(cfg.envelope_custo),
           papel_seda_custo: Number(cfg.papel_seda_custo),
           cartao_custo: Number(cfg.cartao_custo),
-          impressao_valor_folha: Number(cfg.impressao_valor_folha),
-          impressao_fotos_por_folha: Number(cfg.impressao_fotos_por_folha),
+          adesivo_caixa_custo: Number(cfg.adesivo_caixa_custo || 0.32),
+          lacre_caixa_custo: Number(cfg.lacre_caixa_custo || 0.27),
         })
       }
       setLoading(false)
@@ -69,10 +69,6 @@ export default function ConfiguracoesPage() {
     await supabase.auth.signOut()
     router.push('/login')
   }
-
-  const custoPorFoto = materiais.impressao_fotos_por_folha > 0
-    ? materiais.impressao_valor_folha / materiais.impressao_fotos_por_folha
-    : 0
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -144,6 +140,8 @@ export default function ConfiguracoesPage() {
               { key: 'envelope_custo', label: 'Envelope' },
               { key: 'papel_seda_custo', label: 'Papel Seda' },
               { key: 'cartao_custo', label: 'Cartão Reviva' },
+              { key: 'adesivo_caixa_custo', label: 'Adesivo da Caixa' },
+              { key: 'lacre_caixa_custo', label: 'Lacre da Caixa' },
             ] as { key: keyof ConfigMateriais; label: string }[]).map(({ key, label }) => (
               <div key={key} className="flex items-center justify-between py-1">
                 <span className="text-sm text-gray-600">{label}</span>
@@ -155,43 +153,20 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
 
-        {/* Impressão — ainda manual pois não é estoque */}
-        <div className="px-4 pb-1 border-t border-gray-100 pt-3">
-          <div className="flex items-center gap-2 mb-3">
-            <Printer size={13} className="text-gray-400" />
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Impressão</p>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Valor por pedido</span>
-              <div className="flex items-center gap-1">
-                <span className="text-sm text-gray-400">R$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={materiais.impressao_valor_folha}
-                  onChange={e => setM('impressao_valor_folha', e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded-xl px-3 py-2 flex justify-between items-center">
-              <span className="text-xs text-gray-500">Custo fixo por pedido</span>
-              <span className="text-sm font-semibold text-green-700">
-                R$ {Number(materiais.impressao_valor_folha).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-
         <div className="p-4">
+          <div className="bg-[#b5005e]/10 rounded-xl px-4 py-3 mb-3">
+            <p className="text-xs font-semibold text-[#b5005e] mb-1">Impressão</p>
+            <p className="text-xs text-pink-700">
+              Registre o custo de impressão diretamente em cada pedido, em "Custos de Produção Reais".
+              Dessa forma o valor real pago na papelaria fica vinculado ao pedido correto.
+            </p>
+          </div>
           <button
             onClick={salvarMateriais}
             disabled={salvandoMateriais}
             className="w-full py-3 bg-green-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
           >
-            {savedMsg ? '✓ Salvo!' : salvandoMateriais ? 'Salvando...' : 'Salvar impressão'}
+            {savedMsg ? '✓ Salvo!' : salvandoMateriais ? 'Salvando...' : 'Salvar materiais'}
           </button>
         </div>
       </div>
