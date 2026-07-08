@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import { formatCurrency, formatDate } from '@/lib/utils/formatters'
-import { TrendingUp, TrendingDown, Plus, BarChart2, ChevronRight, ChevronLeft } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils/formatters'
+import { Plus, ChevronRight, ChevronLeft, ArrowUpCircle, ArrowDownCircle, Wallet, TrendingUp, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 function urlMes(mes: number, ano: number) {
@@ -9,6 +9,21 @@ function urlMes(mes: number, ano: number) {
 
 function nomeMes(mes: number, ano: number) {
   return new Date(ano, mes, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+}
+
+function fmtData(iso: string) {
+  return new Date(iso.substring(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+}
+
+type Movimento = {
+  key: string
+  data: string        // ISO para ordenação
+  dataDisplay: string
+  descricao: string
+  categoria: string
+  tipo: 'entrada' | 'saida'
+  valor: number
+  saldoApos: number
 }
 
 export default async function FinanceiroPage({
@@ -31,287 +46,272 @@ export default async function FinanceiroPage({
   const anoNext = mesSel === 11 ? anoSel + 1 : anoSel
 
   const inicioMes = new Date(anoSel, mesSel, 1).toISOString().split('T')[0]
-  const fimMes = new Date(anoSel, mesSel + 1, 1).toISOString().split('T')[0]
+  const fimMes    = new Date(anoSel, mesSel + 1, 1).toISOString().split('T')[0]
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('empresa_id')
-    .eq('id', user!.id)
-    .single()
+    .from('usuarios').select('empresa_id').eq('id', user!.id).single()
+  const empresaId = usuario!.empresa_id
 
-  // ── CAIXA TOTAL (todos os tempos) ───────────────────────────────
-  const { data: todosPedidos } = await supabase
-    .from('pedidos')
-    .select('valor_recebido, valor_total, forma_pagamento, tipo')
-    .eq('empresa_id', usuario!.empresa_id)
-    .not('status', 'eq', 'cancelado')
+  // ── CONTA (preparado para múltiplas) ─────────────────────────────
+  const { data: contas } = await supabase
+    .from('contas').select('id, nome').eq('empresa_id', empresaId).eq('ativo', true)
+  const contaPrincipal = contas?.[0] ?? { id: null, nome: 'Conta Principal' }
 
-  const { data: todasCompras } = await supabase
-    .from('movimentacoes_estoque')
-    .select('valor_pago')
-    .eq('empresa_id', usuario!.empresa_id)
-    .eq('tipo', 'entrada')
-    .not('valor_pago', 'is', null)
+  // ── TODOS OS DADOS (para saldo corrido e cards fixos) ────────────
+  const [
+    { data: todosPedidos },
+    { data: todasCompras },
+    { data: todasTransacoes },
+  ] = await Promise.all([
+    supabase.from('pedidos')
+      .select('id, created_at, valor_recebido, valor_total, custo_total_pedido, tipo, forma_pagamento')
+      .eq('empresa_id', empresaId).not('status', 'eq', 'cancelado')
+      .order('created_at', { ascending: true }),
+    supabase.from('movimentacoes_estoque')
+      .select('id, data, valor_pago, insumos(nome)')
+      .eq('empresa_id', empresaId).eq('tipo', 'entrada').not('valor_pago', 'is', null)
+      .order('data', { ascending: true }),
+    supabase.from('financeiro')
+      .select('id, data, tipo, valor, descricao, categoria')
+      .eq('empresa_id', empresaId)
+      .order('data', { ascending: true }),
+  ])
 
-  const { data: todasTransacoes } = await supabase
-    .from('financeiro')
-    .select('tipo, valor')
-    .eq('empresa_id', usuario!.empresa_id)
+  // ── COMBINA E ORDENA TODAS AS MOVIMENTAÇÕES ────────────────────
+  const raw: { key: string; data: string; descricao: string; categoria: string; tipo: 'entrada' | 'saida'; valor: number }[] = [
+    ...(todosPedidos || []).filter(p => p.tipo !== 'mimo' && Number(p.valor_recebido || p.valor_total || 0) > 0).map(p => ({
+      key: `p-${p.id}`,
+      data: p.created_at,
+      descricao: 'Venda',
+      categoria: p.forma_pagamento
+        ? `Venda · ${p.forma_pagamento.replace('_', ' ')}`
+        : 'Venda',
+      tipo: 'entrada' as const,
+      valor: Number(p.valor_recebido || p.valor_total || 0),
+    })),
+    ...(todasCompras || []).map(c => ({
+      key: `c-${c.id}`,
+      data: c.data + 'T00:00:00.000Z',
+      descricao: (c.insumos as any)?.nome ? `Compra: ${(c.insumos as any).nome}` : 'Compra de material',
+      categoria: 'Compra de material',
+      tipo: 'saida' as const,
+      valor: Number(c.valor_pago || 0),
+    })),
+    ...(todasTransacoes || []).map(t => ({
+      key: `f-${t.id}`,
+      data: t.data + 'T00:00:00.000Z',
+      descricao: t.descricao || (t.tipo === 'entrada' ? 'Entrada' : 'Saída'),
+      categoria: t.categoria || (t.tipo === 'entrada' ? 'Outras entradas' : 'Outras despesas'),
+      tipo: t.tipo as 'entrada' | 'saida',
+      valor: Number(t.valor || 0),
+    })),
+  ]
 
-  const totalRecebidoGeral = (todosPedidos || [])
-    .filter(p => p.tipo !== 'mimo')
-    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
-  const totalComprasGeral = (todasCompras || []).reduce((s, c) => s + Number(c.valor_pago || 0), 0)
-  const totalSaidasGeral = (todasTransacoes || []).filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
-  const totalEntradasGeral = (todasTransacoes || []).filter(t => t.tipo === 'entrada').reduce((s, t) => s + Number(t.valor), 0)
-  const caixaTotal = totalRecebidoGeral - totalComprasGeral - totalSaidasGeral + totalEntradasGeral
+  raw.sort((a, b) => a.data.localeCompare(b.data))
 
-  // Pedidos do mês selecionado
-  const { data: pedidosMes } = await supabase
-    .from('pedidos')
-    .select('valor_total, valor_recebido, custo_total_pedido, lucro_real, frete_valor, forma_pagamento, tipo')
-    .eq('empresa_id', usuario!.empresa_id)
-    .not('status', 'eq', 'cancelado')
-    .gte('created_at', inicioMes + 'T00:00:00')
-    .lt('created_at', fimMes + 'T00:00:00')
+  // Calcula saldo corrido
+  let saldoCorrido = 0
+  const allMovimentos: Movimento[] = raw.map(m => {
+    saldoCorrido += m.tipo === 'entrada' ? m.valor : -m.valor
+    return { ...m, dataDisplay: fmtData(m.data), saldoApos: saldoCorrido }
+  })
 
-  // Compras de materiais do mês
-  const { data: comprasMaterial } = await supabase
-    .from('movimentacoes_estoque')
-    .select('valor_pago, observacoes, data, insumos(nome)')
-    .eq('empresa_id', usuario!.empresa_id)
-    .eq('tipo', 'entrada')
-    .not('valor_pago', 'is', null)
-    .gte('data', inicioMes)
-    .lt('data', fimMes)
+  // Saldo em Conta = último saldo do corrido
+  const saldoConta = saldoCorrido
 
-  // Movimentações manuais do mês
-  const { data: transacoes } = await supabase
-    .from('financeiro')
-    .select('*')
-    .eq('empresa_id', usuario!.empresa_id)
-    .gte('data', inicioMes)
-    .lt('data', fimMes)
-    .order('data', { ascending: false })
+  // ── CARDS FIXOS ──────────────────────────────────────────────────
+  const receitaGeral   = raw.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
+  const saidasGeral    = raw.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
+  const custoProdGeral = (todosPedidos || []).reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
+  const saidasManuaisGeral = (todasTransacoes || []).filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
+  const lucroAcumulado = receitaGeral - custoProdGeral - saidasManuaisGeral
 
-  const pedidos = pedidosMes || []
-  const lista = transacoes || []
+  // ── MÊS SELECIONADO ──────────────────────────────────────────────
+  const movimentosMes = allMovimentos.filter(m => {
+    const d = m.data.substring(0, 10)
+    return d >= inicioMes && d < fimMes
+  })
 
-  const vendasPedidos = pedidos.filter(p => p.tipo !== 'mimo')
-  const totalPix = vendasPedidos.filter(p => p.forma_pagamento === 'pix')
-    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
-  const totalLink = vendasPedidos.filter(p => p.forma_pagamento === 'link' || p.forma_pagamento === 'link_pagamento')
-    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
-  const totalCartao = vendasPedidos.filter(p => p.forma_pagamento === 'cartao')
-    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
-  const totalRecebido = totalPix + totalLink + totalCartao
+  // Saldo no início do mês
+  const saldoInicioMes = allMovimentos
+    .filter(m => m.data.substring(0, 10) < inicioMes)
+    .at(-1)?.saldoApos ?? 0
 
-  const lucroReal = pedidos.reduce((s, p) => s + Number(p.lucro_real || 0), 0)
-  const totalCompras = (comprasMaterial || []).reduce((s, c) => s + Number(c.valor_pago || 0), 0)
-  const totalEntradasManuais = lista.filter(t => t.tipo === 'entrada').reduce((s, t) => s + Number(t.valor), 0)
-  const totalSaidasManuais = lista.filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
-  const saldoCaixa = totalRecebido - totalCompras - totalSaidasManuais + totalEntradasManuais
-  const custoproducao = pedidos.reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
+  // Resultado do mês
+  const receitaMes   = movimentosMes.filter(m => m.tipo === 'entrada' && m.categoria.startsWith('Venda')).reduce((s, m) => s + m.valor, 0)
+  const entradasMes  = movimentosMes.filter(m => m.tipo === 'entrada' && !m.categoria.startsWith('Venda')).reduce((s, m) => s + m.valor, 0)
+  const pedidosMesIds = movimentosMes.filter(m => m.key.startsWith('p-')).map(m => m.key.replace('p-', ''))
+  const custoProdMes = (todosPedidos || [])
+    .filter(p => pedidosMesIds.includes(p.id))
+    .reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
+  const saidasMes    = movimentosMes.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
+  const lucroMes     = receitaMes + entradasMes - custoProdMes - saidasMes
+  const margemMes    = receitaMes > 0 ? Math.round((lucroMes / receitaMes) * 100) : 0
 
   return (
     <div className="p-4 pb-24">
-      {/* CAIXA TOTAL */}
-      <div className={`rounded-2xl px-5 py-4 mt-4 mb-4 flex items-center justify-between ${caixaTotal >= 0 ? 'bg-purple-700' : 'bg-red-600'}`}>
+      <div className="pt-4 mb-5 flex items-start justify-between">
         <div>
-          <p className="text-xs text-purple-200 font-medium uppercase tracking-wide">Caixa Total</p>
-          <p className="text-2xl font-bold text-white mt-0.5">{formatCurrency(caixaTotal)}</p>
-          <p className="text-[10px] text-purple-300 mt-1">tudo que entrou menos tudo que saiu</p>
+          <h1 className="text-2xl font-bold text-gray-900">Financeiro</h1>
+          <p className="text-xs text-gray-400 mt-0.5">Saldo real e resultado contábil</p>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-purple-300">Entradas</p>
-          <p className="text-sm font-semibold text-white">{formatCurrency(totalRecebidoGeral + totalEntradasGeral)}</p>
-          <p className="text-[10px] text-purple-300 mt-1">Saídas</p>
-          <p className="text-sm font-semibold text-purple-200">{formatCurrency(totalComprasGeral + totalSaidasGeral)}</p>
+        {/* Seletor de conta — pronto para múltiplas */}
+        <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+          <Building2 size={13} className="text-[#b5005e]" />
+          <span className="text-xs font-semibold text-gray-700">{contaPrincipal.nome}</span>
         </div>
       </div>
 
-      {/* Header com navegação de mês */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Caixa</h1>
+      {/* ── SALDO EM CONTA ───────────────────────────────────────────── */}
+      <div className={`rounded-2xl p-5 mb-3 ${saldoConta >= 0 ? 'bg-[#b5005e]' : 'bg-red-600'}`}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-xs text-pink-200 font-medium uppercase tracking-widest">Saldo em Conta</p>
+            <p className="text-4xl font-bold text-white mt-1">{formatCurrency(saldoConta)}</p>
+            <p className="text-[10px] text-pink-300 mt-1">valor exato que deve existir na conta · não muda ao trocar o mês</p>
+          </div>
+          <Wallet size={26} className="text-pink-300" />
         </div>
-        <Link href="/relatorios" className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
-          <BarChart2 size={14} className="text-green-700" />
-          <span className="text-xs font-semibold text-green-700">Relatórios</span>
-          <ChevronRight size={12} className="text-green-500" />
-        </Link>
+        <div className="flex gap-6 pt-3 border-t border-white/20">
+          <div>
+            <p className="text-[10px] text-pink-300">Total de entradas</p>
+            <p className="text-sm font-bold text-white">{formatCurrency(receitaGeral)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-pink-300">Total de saídas</p>
+            <p className="text-sm font-bold text-pink-200">{formatCurrency(saidasGeral)}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Navegação de meses */}
-      <div className="flex items-center gap-2 mb-5">
-        <Link
-          href={urlMes(mesPrev, anoPrev)}
-          className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-        >
+      {/* ── LUCRO ACUMULADO ──────────────────────────────────────────── */}
+      <div className={`rounded-2xl p-4 mb-5 border ${lucroAcumulado >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Lucro Acumulado (contábil)</p>
+            <p className={`text-2xl font-bold mt-0.5 ${lucroAcumulado >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              {formatCurrency(lucroAcumulado)}
+            </p>
+          </div>
+          <TrendingUp size={22} className={lucroAcumulado >= 0 ? 'text-green-400' : 'text-red-400'} />
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1.5">receitas − custo dos produtos − despesas · valor contábil</p>
+      </div>
+
+      {/* ── NAVEGAÇÃO DE MESES ───────────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4">
+        <Link href={urlMes(mesPrev, anoPrev)}
+          className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shadow-sm">
           <ChevronLeft size={18} className="text-gray-600" />
         </Link>
         <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm py-2.5 px-3 text-center">
           <p className="text-sm font-semibold text-gray-800 capitalize">{nomeMes(mesSel, anoSel)}</p>
-          {ehMesAtual && <p className="text-[10px] text-green-600">mês atual</p>}
+          {ehMesAtual && <p className="text-[10px] text-[#b5005e]">mês atual</p>}
         </div>
-        <Link
-          href={urlMes(mesNext, anoNext)}
-          className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-sm active:scale-95 transition-transform ${
-            ehMesAtual
-              ? 'bg-gray-50 border-gray-100 pointer-events-none opacity-30'
-              : 'bg-white border-gray-200'
-          }`}
-        >
+        <Link href={urlMes(mesNext, anoNext)}
+          className={`w-10 h-10 rounded-xl border flex items-center justify-center shadow-sm ${
+            ehMesAtual ? 'bg-gray-50 border-gray-100 pointer-events-none opacity-30' : 'bg-white border-gray-200'
+          }`}>
           <ChevronRight size={18} className="text-gray-600" />
         </Link>
       </div>
 
-      {/* Dinheiro em Caixa */}
-      <div className={`rounded-2xl p-5 mb-4 ${saldoCaixa >= 0 ? 'bg-green-600' : 'bg-red-500'}`}>
-        <p className="text-sm text-green-200 mb-1">Dinheiro em Caixa</p>
-        <p className="text-3xl font-bold text-white">{formatCurrency(saldoCaixa)}</p>
-        <p className="text-xs text-green-200 mt-1">
-          {formatCurrency(totalRecebido)} recebido − {formatCurrency(totalCompras + totalSaidasManuais - totalEntradasManuais)} em saídas
-        </p>
+      {/* ── RESULTADO DO MÊS ─────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Resultado do mês</h2>
+        <div className="space-y-2.5 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-600">Receita de vendas</span>
+            <span className="font-semibold text-green-700">+{formatCurrency(receitaMes)}</span>
+          </div>
+          {entradasMes > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Outras entradas</span>
+              <span className="font-semibold text-teal-600">+{formatCurrency(entradasMes)}</span>
+            </div>
+          )}
+          <div className="flex justify-between">
+            <span className="text-gray-600">Custo dos produtos</span>
+            <span className="font-semibold text-orange-600">−{formatCurrency(custoProdMes)}</span>
+          </div>
+          {saidasMes > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Saídas do período</span>
+              <span className="font-semibold text-red-600">−{formatCurrency(saidasMes)}</span>
+            </div>
+          )}
+          <div className="border-t border-gray-100 pt-2.5 space-y-1">
+            <div className="flex justify-between font-bold">
+              <span className="text-gray-900">Lucro do mês</span>
+              <span className={lucroMes >= 0 ? 'text-green-700' : 'text-red-600'}>{formatCurrency(lucroMes)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Margem</span>
+              <span className={`font-semibold ${margemMes >= 0 ? 'text-green-600' : 'text-red-500'}`}>{margemMes}%</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Divisão do caixa */}
-      {saldoCaixa > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Como dividir o saldo</p>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
-                <span className="text-sm text-gray-700">Seu salário (⅓)</span>
-              </div>
-              <span className="text-sm font-bold text-green-600">{formatCurrency(saldoCaixa / 3)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                <span className="text-sm text-gray-700">Investimento/estoque (⅓)</span>
-              </div>
-              <span className="text-sm font-bold text-blue-600">{formatCurrency(saldoCaixa / 3)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                <span className="text-sm text-gray-700">Reserva (⅓)</span>
-              </div>
-              <span className="text-sm font-bold text-purple-600">{formatCurrency(saldoCaixa / 3)}</span>
-            </div>
-            <p className="text-[10px] text-gray-300 mt-1">Baseado no saldo disponível · só uma sugestão</p>
-          </div>
-        </div>
-      )}
-
-      {/* Breakdown do mês */}
+      {/* ── FLUXO DE CAIXA ───────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center">
-                <TrendingUp size={14} className="text-green-600" />
-              </div>
-              <span className="text-sm font-semibold text-gray-700">Recebido de vendas</span>
-            </div>
-            <span className="text-base font-bold text-green-700">+{formatCurrency(totalRecebido)}</span>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {totalPix > 0 && (
-              <span className="text-xs bg-green-50 text-green-700 px-2.5 py-1 rounded-full font-medium">Pix {formatCurrency(totalPix)}</span>
-            )}
-            {totalLink > 0 && (
-              <span className="text-xs bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-medium">Link {formatCurrency(totalLink)}</span>
-            )}
-            {totalCartao > 0 && (
-              <span className="text-xs bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full font-medium">Cartão {formatCurrency(totalCartao)}</span>
-            )}
-            {totalRecebido === 0 && <span className="text-xs text-gray-400">Nenhuma venda registrada</span>}
-          </div>
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Fluxo de caixa</h2>
+          <span className="text-xs text-gray-400">{movimentosMes.length} movimentações</span>
         </div>
 
-        <Link href="/financeiro/compras" className="p-4 border-b border-gray-100 flex items-center justify-between group">
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <TrendingDown size={14} className="text-orange-600" />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Compras de material</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-base font-bold text-orange-600">
-                  {totalCompras > 0 ? `−${formatCurrency(totalCompras)}` : formatCurrency(0)}
-                </span>
-                <ChevronRight size={14} className="text-gray-300" />
-              </div>
-            </div>
-            <p className="text-xs text-gray-400 ml-9">toque para ver detalhes</p>
-          </div>
-        </Link>
+        {/* Saldo inicial do mês */}
+        <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
+          <span className="text-xs text-gray-500 font-medium">Saldo no início do mês</span>
+          <span className="text-xs font-bold text-gray-700">{formatCurrency(saldoInicioMes)}</span>
+        </div>
 
-        <div className="p-4 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
-                <TrendingDown size={14} className="text-amber-600" />
+        {movimentosMes.length === 0 ? (
+          <p className="text-gray-400 text-sm text-center py-8">Nenhuma movimentação neste mês</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {movimentosMes.map(m => (
+              <div key={m.key} className="px-4 py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {m.tipo === 'entrada'
+                      ? <ArrowUpCircle size={15} className="text-green-500 shrink-0" />
+                      : <ArrowDownCircle size={15} className="text-red-400 shrink-0" />}
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-800 font-medium truncate">{m.descricao}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-gray-400">{m.dataDisplay}</span>
+                        <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{m.categoria}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0 ml-3">
+                    <p className={`text-sm font-bold ${m.tipo === 'entrada' ? 'text-green-700' : 'text-red-600'}`}>
+                      {m.tipo === 'entrada' ? '+' : '−'}{formatCurrency(m.valor)}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">saldo {formatCurrency(m.saldoApos)}</p>
+                  </div>
+                </div>
               </div>
-              <span className="text-sm font-semibold text-gray-700">Custo de produção</span>
-            </div>
-            <span className="text-base font-bold text-amber-600">
-              {custoproducao > 0 ? `−${formatCurrency(custoproducao)}` : formatCurrency(0)}
+            ))}
+          </div>
+        )}
+
+        {/* Saldo final do mês */}
+        {movimentosMes.length > 0 && (
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+            <span className="text-xs text-gray-600 font-semibold">Saldo no fim do mês</span>
+            <span className={`text-sm font-bold ${(movimentosMes.at(-1)?.saldoApos ?? 0) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+              {formatCurrency(movimentosMes.at(-1)?.saldoApos ?? 0)}
             </span>
           </div>
-          <p className="text-xs text-gray-400 ml-9">materiais consumidos nos pedidos ({pedidos.length} pedidos)</p>
-        </div>
-
-        {totalSaidasManuais > 0 && (
-          <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-red-100 rounded-lg flex items-center justify-center">
-                  <TrendingDown size={14} className="text-red-500" />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Outras saídas</span>
-              </div>
-              <span className="text-base font-bold text-red-500">−{formatCurrency(totalSaidasManuais)}</span>
-            </div>
-          </div>
         )}
-
-        {totalEntradasManuais > 0 && (
-          <div className="p-4 border-b border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-teal-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp size={14} className="text-teal-600" />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Outras entradas</span>
-              </div>
-              <span className="text-base font-bold text-teal-600">+{formatCurrency(totalEntradasManuais)}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="p-4 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-gray-700">Lucro Real</p>
-              <p className="text-xs text-gray-400 mt-0.5">vendas − custo de produção</p>
-            </div>
-            <p className={`text-base font-bold ${lucroReal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(lucroReal)}
-            </p>
-          </div>
-        </div>
       </div>
 
-      {/* Botões */}
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      {/* ── BOTÕES ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3">
         <Link href="/financeiro/nova-entrada"
           className="flex items-center justify-center gap-2 bg-green-100 text-green-700 py-3 rounded-xl font-medium text-sm">
           <Plus size={16} /> Entrada
@@ -321,30 +321,6 @@ export default async function FinanceiroPage({
           <Plus size={16} /> Saída
         </Link>
       </div>
-
-      {/* Histórico manual */}
-      {lista.length > 0 && (
-        <>
-          <h2 className="font-semibold text-gray-700 text-sm mb-3">Movimentações manuais</h2>
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100 mb-4">
-            {lista.map((t) => (
-              <div key={t.id} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{t.descricao}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{formatDate(t.data)}</p>
-                </div>
-                <p className={`text-sm font-bold ${t.tipo === 'entrada' ? 'text-green-600' : 'text-red-500'}`}>
-                  {t.tipo === 'entrada' ? '+' : '−'}{formatCurrency(t.valor)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {pedidos.length === 0 && lista.length === 0 && (
-        <p className="text-gray-400 text-sm text-center py-8">Nenhuma movimentação neste mês</p>
-      )}
     </div>
   )
 }
