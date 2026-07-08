@@ -41,6 +41,33 @@ export default async function FinanceiroPage({
     .eq('id', user!.id)
     .single()
 
+  // ── CAIXA TOTAL (todos os tempos) ───────────────────────────────
+  const { data: todosPedidos } = await supabase
+    .from('pedidos')
+    .select('valor_recebido, valor_total, forma_pagamento, tipo')
+    .eq('empresa_id', usuario!.empresa_id)
+    .not('status', 'eq', 'cancelado')
+
+  const { data: todasCompras } = await supabase
+    .from('movimentacoes_estoque')
+    .select('valor_pago')
+    .eq('empresa_id', usuario!.empresa_id)
+    .eq('tipo', 'entrada')
+    .not('valor_pago', 'is', null)
+
+  const { data: todasTransacoes } = await supabase
+    .from('financeiro')
+    .select('tipo, valor')
+    .eq('empresa_id', usuario!.empresa_id)
+
+  const totalRecebidoGeral = (todosPedidos || [])
+    .filter(p => p.tipo !== 'mimo')
+    .reduce((s, p) => s + Number(p.valor_recebido || p.valor_total || 0), 0)
+  const totalComprasGeral = (todasCompras || []).reduce((s, c) => s + Number(c.valor_pago || 0), 0)
+  const totalSaidasGeral = (todasTransacoes || []).filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
+  const totalEntradasGeral = (todasTransacoes || []).filter(t => t.tipo === 'entrada').reduce((s, t) => s + Number(t.valor), 0)
+  const caixaTotal = totalRecebidoGeral - totalComprasGeral - totalSaidasGeral + totalEntradasGeral
+
   // Pedidos do mês selecionado
   const { data: pedidosMes } = await supabase
     .from('pedidos')
@@ -90,8 +117,23 @@ export default async function FinanceiroPage({
 
   return (
     <div className="p-4 pb-24">
+      {/* CAIXA TOTAL */}
+      <div className={`rounded-2xl px-5 py-4 mt-4 mb-4 flex items-center justify-between ${caixaTotal >= 0 ? 'bg-purple-700' : 'bg-red-600'}`}>
+        <div>
+          <p className="text-xs text-purple-200 font-medium uppercase tracking-wide">Caixa Total</p>
+          <p className="text-2xl font-bold text-white mt-0.5">{formatCurrency(caixaTotal)}</p>
+          <p className="text-[10px] text-purple-300 mt-1">tudo que entrou menos tudo que saiu</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] text-purple-300">Entradas</p>
+          <p className="text-sm font-semibold text-white">{formatCurrency(totalRecebidoGeral + totalEntradasGeral)}</p>
+          <p className="text-[10px] text-purple-300 mt-1">Saídas</p>
+          <p className="text-sm font-semibold text-purple-200">{formatCurrency(totalComprasGeral + totalSaidasGeral)}</p>
+        </div>
+      </div>
+
       {/* Header com navegação de mês */}
-      <div className="flex items-center justify-between pt-4 mb-3">
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Caixa</h1>
         </div>
