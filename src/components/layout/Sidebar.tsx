@@ -6,28 +6,28 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, Users, DollarSign,
   Package, Settings, PartyPopper, BarChart2, X, Menu,
-  Layers, Archive
+  Layers, Archive, TrendingUp
 } from 'lucide-react'
 
 const MENU = [
   {
     section: 'PRINCIPAL',
     items: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'Início' },
+      { href: '/dashboard',  icon: LayoutDashboard, label: 'Início' },
+      { href: '/relatorios', icon: TrendingUp,       label: 'BI / Relatórios' },
     ],
   },
   {
     section: 'VENDAS',
     items: [
-      { href: '/pedidos', icon: ShoppingBag, label: 'Pedidos' },
-      { href: '/clientes', icon: Users, label: 'Clientes' },
+      { href: '/pedidos',  icon: ShoppingBag, label: 'Pedidos' },
+      { href: '/clientes', icon: Users,        label: 'Clientes' },
     ],
   },
   {
     section: 'FINANCEIRO',
     items: [
       { href: '/financeiro', icon: DollarSign, label: 'Caixa' },
-      { href: '/relatorios', icon: BarChart2, label: 'Relatórios' },
     ],
   },
   {
