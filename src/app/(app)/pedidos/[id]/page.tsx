@@ -71,13 +71,18 @@ export default function PedidoDetailPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', user!.id).single()
-    await supabase.from('custos_producao').insert({
+    const { error } = await supabase.from('custos_producao').insert({
       pedido_id: id,
       empresa_id: usuario!.empresa_id,
       descricao: novoCustoDesc.trim(),
       valor: parseFloat(novoCustoValor),
       data: new Date().toISOString().split('T')[0],
     })
+    if (error) {
+      alert('Erro ao lançar custo: ' + error.message)
+      setSalvandoCusto(false)
+      return
+    }
     setNovoCustoDesc('')
     setNovoCustoValor('')
     await carregarCustosProducao()
