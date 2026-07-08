@@ -5,13 +5,28 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useParams } from 'next/navigation'
 import {
   ArrowLeft, MessageCircle, ChevronRight, ChevronDown, Truck, Pencil, Trash2,
-  FolderOpen, Camera, Package, Images, Download, Wrench, PlusCircle,
-  DollarSign, TrendingUp, Calendar,
+  FolderOpen, Camera, Package, Download, Wrench, PlusCircle,
+  DollarSign, TrendingUp, CheckSquare, Square,
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
 import { descontarEstoque } from '@/lib/utils/estoque'
+
+// ── checklist de produção (somente display, sem afetar status) ────────
+type ChecklistKey = 'fotos_conferidas' | 'impressao_realizada' | 'imas_montados' | 'embalagem_finalizada'
+const CHECKLIST_ITEMS: { key: ChecklistKey; label: string }[] = [
+  { key: 'fotos_conferidas',    label: 'Fotos conferidas' },
+  { key: 'impressao_realizada', label: 'Impressão realizada' },
+  { key: 'imas_montados',       label: 'Ímãs montados' },
+  { key: 'embalagem_finalizada',label: 'Embalagem finalizada' },
+]
+const DEFAULT_CHECKLIST: Record<ChecklistKey, boolean> = {
+  fotos_conferidas: false,
+  impressao_realizada: false,
+  imas_montados: false,
+  embalagem_finalizada: false,
+}
 
 export default function PedidoDetailPage() {
   const router = useRouter()
@@ -34,8 +49,10 @@ export default function PedidoDetailPage() {
   const [novoCustoDesc, setNovoCustoDesc] = useState('')
   const [novoCustoValor, setNovoCustoValor] = useState('')
   const [salvandoCusto, setSalvandoCusto] = useState(false)
-  // visual only — expande detalhe de custo de material
+  // visual only
   const [expandirMateriais, setExpandirMateriais] = useState(false)
+  // checklist de produção (persiste em localStorage por pedido)
+  const [checklist, setChecklist] = useState<Record<ChecklistKey, boolean>>(DEFAULT_CHECKLIST)
 
   // ── funções de dados (preservadas integralmente) ───────────────────
   async function carregarCustosProducao() {
@@ -119,8 +136,25 @@ export default function PedidoDetailPage() {
     setLoading(false)
   }
 
-  useEffect(() => { carregar(); carregarFotos(); carregarCustosProducao() }, [id])
+  useEffect(() => {
+    carregar()
+    carregarFotos()
+    carregarCustosProducao()
+    // carregar checklist do localStorage
+    const saved = localStorage.getItem(`reviva_prod_check_${id}`)
+    if (saved) {
+      try { setChecklist(JSON.parse(saved)) } catch { /* ignora */ }
+    }
+  }, [id])
 
+  // ── toggle checklist (sem tocar no banco) ─────────────────────────
+  function toggleCheck(key: ChecklistKey) {
+    const updated = { ...checklist, [key]: !checklist[key] }
+    setChecklist(updated)
+    localStorage.setItem(`reviva_prod_check_${id}`, JSON.stringify(updated))
+  }
+
+  // ── ações (preservadas integralmente) ─────────────────────────────
   async function mudarStatus(novoStatus: string) {
     setAtualizando(true)
     const supabase = createClient()
@@ -282,6 +316,13 @@ export default function PedidoDetailPage() {
 
   const temEnvio = pedido.transportadora || pedido.frete_valor > 0 || pedido.codigo_rastreio || rastreio
 
+  // ── progresso de fotos ─────────────────────────────────────────────
+  const qtdFotosEsperadas = qtdImasPedido > 0 ? qtdImasPedido : null
+  const progresso = qtdFotosEsperadas
+    ? Math.min(100, Math.round((fotos.length / qtdFotosEsperadas) * 100))
+    : fotos.length > 0 ? 100 : 0
+  const fotosCompletas = qtdFotosEsperadas ? fotos.length >= qtdFotosEsperadas : fotos.length > 0
+
   // ── render ─────────────────────────────────────────────────────────
   return (
     <div className="p-4 pb-28">
@@ -430,11 +471,11 @@ export default function PedidoDetailPage() {
                 {expandirMateriais && (
                   <div className="ml-3 border-l-2 border-gray-100 pl-3 space-y-1.5 py-1">
                     {[
-                      { label: 'Ímãs', val: custosSalvos.custo_imas },
-                      { label: 'Saquinhos', val: custosSalvos.custo_saquinhos },
-                      { label: 'Caixa', val: custosSalvos.custo_caixa },
-                      { label: 'Envelope', val: custosSalvos.custo_envelope },
-                      { label: 'Papel Seda', val: custosSalvos.custo_papel_seda },
+                      { label: 'Ímãs',         val: custosSalvos.custo_imas },
+                      { label: 'Saquinhos',     val: custosSalvos.custo_saquinhos },
+                      { label: 'Caixa',         val: custosSalvos.custo_caixa },
+                      { label: 'Envelope',      val: custosSalvos.custo_envelope },
+                      { label: 'Papel Seda',    val: custosSalvos.custo_papel_seda },
                       { label: 'Cartão Reviva', val: custosSalvos.custo_cartao },
                     ].map(({ label, val }) => val > 0 && (
                       <div key={label} className="flex justify-between text-xs text-gray-500">
@@ -447,30 +488,15 @@ export default function PedidoDetailPage() {
               </>
             )}
 
-            {/* custos de produção reais */}
-            {custosProducao.length > 0 && (
-              <>
-                <div className="flex justify-between text-gray-500 font-medium">
-                  <span>Custos de produção</span>
-                  <span className="text-red-500">−{formatCurrency(totalCustosProducao)}</span>
-                </div>
-                <div className="ml-3 border-l-2 border-gray-100 pl-3 space-y-1.5">
-                  {custosProducao.map(c => (
-                    <div key={c.id} className="flex justify-between items-center text-xs text-gray-500">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => removerCusto(c.id)}
-                          className="text-red-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                        <span>{c.descricao}</span>
-                      </div>
-                      <span>−{formatCurrency(Number(c.valor))}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
+            {/* custos de produção — resumo (detalhe fica em Produção) */}
+            {totalCustosProducao > 0 && (
+              <div className="flex justify-between text-gray-500">
+                <span>
+                  Custos de produção
+                  <span className="text-gray-400 text-xs ml-1">({custosProducao.length})</span>
+                </span>
+                <span className="text-red-500 font-semibold">−{formatCurrency(totalCustosProducao)}</span>
+              </div>
             )}
 
             {/* lucro */}
@@ -487,52 +513,6 @@ export default function PedidoDetailPage() {
               </div>
             </div>
           </div>
-
-          {/* form: lançar custo de produção */}
-          <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Wrench size={11} />
-              Lançar custo de produção
-            </p>
-            <div className="flex gap-1.5 mb-2 flex-wrap">
-              {['Impressão', 'Frete', 'Outro'].map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setNovoCustoDesc(opt)}
-                  className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
-                    novoCustoDesc === opt
-                      ? 'bg-[#b5005e] text-white border-[#b5005e]'
-                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-pink-300'
-                  }`}
-                >{opt}</button>
-              ))}
-            </div>
-            <input
-              type="text"
-              value={novoCustoDesc}
-              onChange={e => setNovoCustoDesc(e.target.value)}
-              placeholder="Descrição do custo"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 mb-2"
-            />
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={novoCustoValor}
-                onChange={e => setNovoCustoValor(e.target.value)}
-                placeholder="Valor (R$)"
-                step="0.01"
-                min="0"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
-              />
-              <button
-                onClick={adicionarCusto}
-                disabled={salvandoCusto || !novoCustoDesc.trim() || !novoCustoValor}
-                className="flex items-center gap-1.5 bg-[#b5005e] text-white px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
-              >
-                {salvandoCusto ? '...' : <><PlusCircle size={14} /> Lançar</>}
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -542,67 +522,218 @@ export default function PedidoDetailPage() {
           <Wrench size={14} className="text-[#b5005e]" />
           <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Produção</p>
           {fotos.length > 0 && (
-            <span className="ml-auto text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">
+            <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${fotosCompletas ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}`}>
               {fotos.length} foto{fotos.length !== 1 ? 's' : ''}
             </span>
           )}
         </div>
-        <div className="p-4 space-y-3">
 
-          {/* Drive + solicitar fotos */}
-          {pedido.link_pasta_drive ? (
-            <div className="space-y-2">
+        <div className="divide-y divide-gray-50">
+
+          {/* ── A. Drive ── */}
+          <div className="p-4">
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">Pasta de Fotos</p>
+            {pedido.link_pasta_drive ? (
               <a
                 href={pedido.link_pasta_drive}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2.5 text-sm font-medium text-yellow-800 active:scale-95 transition-all"
+                className="flex items-center gap-2.5 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm font-bold text-yellow-800 active:scale-95 transition-all"
               >
-                <FolderOpen size={15} className="text-yellow-600 shrink-0" />
-                <span className="flex-1">Pasta no Google Drive</span>
-                <ChevronRight size={13} className="text-yellow-500" />
+                <FolderOpen size={18} className="text-yellow-600 shrink-0" />
+                <span className="flex-1">Abrir pasta no Google Drive</span>
+                <ChevronRight size={14} className="text-yellow-500" />
               </a>
-              {pedido.clientes?.whatsapp && (
-                <button
-                  onClick={enviarSolicitacaoFotos}
-                  className="w-full flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 text-sm font-medium text-green-800 active:scale-95 transition-all"
-                >
-                  <Camera size={15} className="text-green-600 shrink-0" />
-                  <span className="flex-1">Solicitar fotos via WhatsApp</span>
-                </button>
+            ) : (
+              <Link
+                href={`/pedidos/${id}/editar`}
+                className="flex items-center gap-2.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl px-4 py-3 text-sm font-medium text-gray-500 active:scale-95 transition-all"
+              >
+                <FolderOpen size={18} className="text-gray-400 shrink-0" />
+                <span className="flex-1">Adicionar link do Drive</span>
+                <ChevronRight size={14} className="text-gray-400" />
+              </Link>
+            )}
+          </div>
+
+          {/* ── B. Fotos recebidas ── */}
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Fotos recebidas</p>
+              {qtdFotosEsperadas && (
+                <span className={`text-sm font-bold ${fotosCompletas ? 'text-green-600' : 'text-gray-600'}`}>
+                  {fotos.length} / {qtdFotosEsperadas}
+                </span>
+              )}
+              {!qtdFotosEsperadas && fotos.length > 0 && (
+                <span className="text-sm font-bold text-gray-600">{fotos.length}</span>
               )}
             </div>
-          ) : (
-            <p className="text-sm text-gray-400 italic">Pasta Drive não criada — configure em Configurações.</p>
-          )}
 
-          {/* fotos do cliente */}
-          {fotos.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhuma foto enviada ainda.</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {fotos.map((foto) => (
-                <div key={foto.name} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
-                  <img
-                    src={foto.url}
-                    alt={foto.name}
-                    className="w-full h-full object-cover cursor-pointer active:scale-95 transition-all"
-                    onClick={() => setFotoAmpliada(foto.url)}
+            {/* barra de progresso */}
+            {qtdFotosEsperadas && (
+              <div className="mb-3">
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${fotosCompletas ? 'bg-green-500' : 'bg-[#b5005e]'}`}
+                    style={{ width: `${progresso}%` }}
                   />
-                  <a
-                    href={foto.url}
-                    download={foto.name}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="absolute bottom-1 right-1 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <Download size={12} className="text-white" />
-                  </a>
                 </div>
-              ))}
+                <p className={`text-[10px] font-semibold mt-1 ${fotosCompletas ? 'text-green-600' : 'text-gray-400'}`}>
+                  {fotosCompletas ? '✓ Todas as fotos recebidas' : `${progresso}% — faltam ${qtdFotosEsperadas - fotos.length}`}
+                </p>
+              </div>
+            )}
+
+            {/* solicitar fotos */}
+            {pedido.clientes?.whatsapp && (
+              <button
+                onClick={enviarSolicitacaoFotos}
+                className="w-full flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 text-sm font-medium text-green-800 active:scale-95 transition-all mb-3"
+              >
+                <Camera size={15} className="text-green-600 shrink-0" />
+                <span className="flex-1">Solicitar fotos via WhatsApp</span>
+              </button>
+            )}
+
+            {/* grade de fotos */}
+            {fotos.length === 0 ? (
+              <p className="text-sm text-gray-400 italic text-center py-2">Nenhuma foto enviada ainda.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {fotos.map((foto) => (
+                  <div key={foto.name} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                    <img
+                      src={foto.url}
+                      alt={foto.name}
+                      className="w-full h-full object-cover cursor-pointer active:scale-95 transition-all"
+                      onClick={() => setFotoAmpliada(foto.url)}
+                    />
+                    <a
+                      href={foto.url}
+                      download={foto.name}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute bottom-1 right-1 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <Download size={12} className="text-white" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── C. Checklist de produção ── */}
+          <div className="p-4">
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-3">Checklist</p>
+            <div className="space-y-2">
+              {CHECKLIST_ITEMS.map(({ key, label }) => {
+                const marcado = checklist[key]
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleCheck(key)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all active:scale-[0.98] text-left ${
+                      marcado
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-gray-50 border-gray-100 hover:border-gray-200'
+                    }`}
+                  >
+                    {marcado
+                      ? <CheckSquare size={18} className="text-green-600 shrink-0" />
+                      : <Square size={18} className="text-gray-300 shrink-0" />
+                    }
+                    <span className={`text-sm font-medium ${marcado ? 'text-green-800 line-through decoration-green-400' : 'text-gray-700'}`}>
+                      {label}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-          )}
+            <p className="text-[10px] text-gray-300 mt-2 text-center">Controle interno — não altera o status do pedido</p>
+          </div>
+
+          {/* ── D. Custos de produção reais ── */}
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+                <Wrench size={11} className="text-gray-400" />
+                Custos de produção reais
+              </p>
+              {totalCustosProducao > 0 && (
+                <span className="text-sm font-bold text-red-500">−{formatCurrency(totalCustosProducao)}</span>
+              )}
+            </div>
+
+            {/* lista de custos */}
+            {custosProducao.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {custosProducao.map(c => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between bg-red-50 border border-red-100 rounded-xl px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => removerCusto(c.id)}
+                        className="text-red-300 hover:text-red-500 transition-colors shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                      <span className="text-sm text-gray-700">{c.descricao}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-red-600">−{formatCurrency(Number(c.valor))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* form: lançar novo custo */}
+            <div className={`${custosProducao.length > 0 ? 'pt-3 border-t border-dashed border-gray-200' : ''}`}>
+              <p className="text-xs text-gray-400 mb-2">Lançar custo real</p>
+              <div className="flex gap-1.5 mb-2 flex-wrap">
+                {['Impressão', 'Frete', 'Outro'].map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setNovoCustoDesc(opt)}
+                    className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
+                      novoCustoDesc === opt
+                        ? 'bg-[#b5005e] text-white border-[#b5005e]'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-pink-300'
+                    }`}
+                  >{opt}</button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={novoCustoDesc}
+                onChange={e => setNovoCustoDesc(e.target.value)}
+                placeholder="Descrição do custo"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300 mb-2"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={novoCustoValor}
+                  onChange={e => setNovoCustoValor(e.target.value)}
+                  placeholder="Valor (R$)"
+                  step="0.01"
+                  min="0"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-300"
+                />
+                <button
+                  onClick={adicionarCusto}
+                  disabled={salvandoCusto || !novoCustoDesc.trim() || !novoCustoValor}
+                  className="flex items-center gap-1.5 bg-[#b5005e] text-white px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+                >
+                  {salvandoCusto ? '...' : <><PlusCircle size={14} /> Lançar</>}
+                </button>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -639,7 +770,7 @@ export default function PedidoDetailPage() {
               </div>
             )}
 
-            {/* código de rastreio */}
+            {/* campos de envio */}
             <div>
               <p className="text-xs text-gray-500 mb-1.5">Data de Postagem</p>
               <input
