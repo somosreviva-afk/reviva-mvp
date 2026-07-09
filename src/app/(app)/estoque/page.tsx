@@ -23,14 +23,16 @@ const STATUS_CFG = {
 }
 
 // ── capacidade de produção por kit ─────────────────────────────────────
+// Usa SOMENTE os 4 componentes do ímã (1 de cada por ímã no kit)
+const TIPOS_IMA_CAP = ['ima_magnetico', 'placa_plastico', 'placa_metal', 'plastico_protecao']
+
 function calcCapacidadeKit(qtdImasKit: number, insumos: any[]): number {
   const map = Object.fromEntries(insumos.map(i => [i.tipo, i]))
-  const consumo = calcularConsumo(qtdImasKit, 12)
   let min = Infinity
-  for (const [tipo, qtdPorKit] of Object.entries(consumo)) {
-    if (qtdPorKit <= 0) continue
+  for (const tipo of TIPOS_IMA_CAP) {
     const disp = Number(map[tipo]?.quantidade || 0)
-    min = Math.min(min, Math.floor(disp / qtdPorKit))
+    const cap  = Math.floor(disp / qtdImasKit)
+    if (cap < min) min = cap
   }
   return min === Infinity ? 0 : min
 }
@@ -44,8 +46,8 @@ export default function EstoquePage() {
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<string | null>(null)
   const [editMin, setEditMin] = useState('')
-  // tamanhos de kit reais dos pedidos cadastrados
-  const [tamanhoKits, setTamanhoKits] = useState<number[]>([])
+  // kits baseados nos produtos cadastrados
+  const [produtosKit, setProdutosKit] = useState<{nome: string, qtdImas: number}[]>([])
   // filtros (só visual)
   const [busca, setBusca] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState<'todos' | 'imas' | 'embalagem'>('todos')
@@ -60,7 +62,7 @@ export default function EstoquePage() {
 
     await garantirInsumos(supabase, empresaId)
 
-    const [{ data: ins }, { data: mov }, { data: lotesPend }, { data: pedidosQtd }] = await Promise.all([
+    const [{ data: ins }, { data: mov }, { data: lotesPend }, { data: prods }] = await Promise.all([
       supabase.from('insumos').select('*').eq('empresa_id', empresaId).order('nome'),
       supabase
         .from('movimentacoes_estoque')
@@ -74,19 +76,27 @@ export default function EstoquePage() {
         .eq('empresa_id', empresaId)
         .eq('status', 'pendente')
         .order('created_at', { ascending: true }),
-      // tamanhos distintos de kit dos pedidos reais (exceto mimo/sem ímã)
+      // produtos cadastrados — base para capacidade de produção
       supabase
-        .from('pedidos')
-        .select('qtd_imas')
+        .from('produtos')
+        .select('nome')
         .eq('empresa_id', empresaId)
-        .gt('qtd_imas', 0),
+        .eq('ativo', true),
     ])
 
-    // valores únicos de qtd_imas ordenados crescente
-    const qtdsUnicas = [...new Set((pedidosQtd || []).map((p: any) => Number(p.qtd_imas)))]
-      .filter(v => v > 0)
-      .sort((a, b) => a - b)
-    setTamanhoKits(qtdsUnicas)
+    // extrai quantidade de ímãs do nome do produto (ex: "Kit 12 Ímãs" → 12)
+    const kitsExtraidos: {nome: string, qtdImas: number}[] = []
+    ;(prods || []).forEach((p: any) => {
+      const match = p.nome.match(/\d+/)
+      if (match) {
+        const qtd = Number(match[0])
+        if (qtd > 0 && !kitsExtraidos.find(k => k.qtdImas === qtd)) {
+          kitsExtraidos.push({ nome: p.nome, qtdImas: qtd })
+        }
+      }
+    })
+    kitsExtraidos.sort((a, b) => a.qtdImas - b.qtdImas)
+    setProdutosKit(kitsExtraidos)
 
     const pendMap: Record<string, any[]> = {}
     ;(lotesPend || []).forEach((l: any) => {
@@ -125,14 +135,14 @@ export default function EstoquePage() {
     return map
   }, [movimentacoes])
 
-  // capacidade por kit — calculada a partir dos tamanhos reais dos pedidos cadastrados
+  // capacidade por kit — baseada nos produtos cadastrados
   const capacidadeKits = useMemo(() =>
-    tamanhoKits.map(qtd => ({
-      nome: `${qtd} ímãs`,
-      qtdImas: qtd,
-      capacidade: calcCapacidadeKit(qtd, insumos),
+    produtosKit.map(p => ({
+      nome: p.nome,
+      qtdImas: p.qtdImas,
+      capacidade: calcCapacidadeKit(p.qtdImas, insumos),
     })),
-    [tamanhoKits, insumos]
+    [produtosKit, insumos]
   )
 
   // categorias
@@ -343,12 +353,12 @@ export default function EstoquePage() {
           <div className="p-4">
             {capacidadeKits.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-2">
-                Nenhum pedido cadastrado ainda. O painel será preenchido automaticamente conforme os pedidos forem criados.
+                Nenhum produto cadastrado ainda. O painel será preenchido automaticamente conforme os produtos forem criados.
               </p>
             ) : (
               <>
                 <p className="text-xs text-gray-400 mb-3">
-                  Baseado nos tamanhos de pedidos já cadastrados · atualiza automaticamente
+                  Baseado nos produtos cadastrados · limitado por placa metal, plástico, proteção e ímã
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {capacidadeKits.map(k => (
@@ -549,16 +559,4 @@ export default function EstoquePage() {
         <Link
           href="/estoque/descarte"
           className="flex items-center gap-2 bg-red-500 text-white px-4 py-3 rounded-2xl shadow-lg font-semibold text-sm active:scale-95 transition-all"
-        >
-          <Trash2 size={16} /> Descarte
-        </Link>
-        <Link
-          href="/estoque/entrada"
-          className="flex items-center gap-2 bg-green-600 text-white px-5 py-3.5 rounded-2xl shadow-lg font-semibold text-sm active:scale-95 transition-all"
-        >
-          <Plus size={18} /> Entrada de Estoque
-        </Link>
-      </div>
-    </div>
-  )
-}
+     
