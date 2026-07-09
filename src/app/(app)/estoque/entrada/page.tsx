@@ -22,6 +22,7 @@ export default function EntradaEstoquePage() {
   const [valorPago, setValorPago] = useState('')
   const [data, setData] = useState(new Date().toISOString().split('T')[0])
   const [observacoes, setObservacoes] = useState('')
+  const [tipoCompra, setTipoCompra] = useState<'completo' | 'sem_ima'>('sem_ima')
 
   const isBaseGrupo = insumoId === BASE_GRUPO_ID
   const insumoSelecionado = isBaseGrupo ? null : insumos.find(i => i.id === insumoId)
@@ -105,6 +106,7 @@ export default function EntradaEstoquePage() {
         status,
         data_compra: hoje,
         observacoes: observacoes || null,
+        com_ima_incorporado: isBaseGrupo && tipoCompra === 'completo',
       })
 
       // Atualiza quantidade e custo do insumo
@@ -200,6 +202,47 @@ export default function EntradaEstoquePage() {
           ) : null}
         </div>
 
+        {/* Tipo da Compra — só para o grupo de placas */}
+        {isBaseGrupo && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo da Compra *</label>
+            <div className="space-y-2">
+              <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tipoCompra === 'sem_ima' ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'
+              }`}>
+                <input
+                  type="radio"
+                  name="tipoCompra"
+                  value="sem_ima"
+                  checked={tipoCompra === 'sem_ima'}
+                  onChange={() => setTipoCompra('sem_ima')}
+                  className="mt-0.5 accent-green-600"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Material sem ímã</p>
+                  <p className="text-xs text-gray-500">Só as placas. O ímã magnético será comprado e registrado separadamente.</p>
+                </div>
+              </label>
+              <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tipoCompra === 'completo' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'
+              }`}>
+                <input
+                  type="radio"
+                  name="tipoCompra"
+                  value="completo"
+                  checked={tipoCompra === 'completo'}
+                  onChange={() => setTipoCompra('completo')}
+                  className="mt-0.5 accent-blue-600"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">Material completo (já possui ímã)</p>
+                  <p className="text-xs text-gray-500">O ímã já vem incorporado na placa. Custo do ímã embutido no valor pago.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* Quantidade */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -241,14 +284,19 @@ export default function EntradaEstoquePage() {
         {custoUnitario !== null && (
           <div className="bg-blue-50 rounded-xl px-4 py-3 space-y-1">
             <div className="flex justify-between items-center">
-              <p className="text-xs font-semibold text-blue-700">Custo por peça</p>
+              <p className="text-xs font-semibold text-blue-700">
+                Custo por peça{isBaseGrupo && tipoCompra === 'completo' ? ' (inclui ímã)' : ''}
+              </p>
               <p className="text-base font-bold text-blue-700">{fmt(custoUnitario)}</p>
             </div>
-            {isBaseGrupo && (
+            {isBaseGrupo && tipoCompra === 'sem_ima' && (
               <div className="flex justify-between items-center">
                 <p className="text-xs text-blue-600">Contribuição por ímã (3 componentes)</p>
                 <p className="text-sm font-semibold text-blue-600">{fmt(custoUnitario * 3)}</p>
               </div>
+            )}
+            {isBaseGrupo && tipoCompra === 'completo' && (
+              <p className="text-xs text-blue-600">Ímã já incorporado — não será lançado separadamente</p>
             )}
           </div>
         )}
