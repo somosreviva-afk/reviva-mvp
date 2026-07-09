@@ -559,4 +559,16 @@ export default function EstoquePage() {
         <Link
           href="/estoque/descarte"
           className="flex items-center gap-2 bg-red-500 text-white px-4 py-3 rounded-2xl shadow-lg font-semibold text-sm active:scale-95 transition-all"
-     
+             >
+          <Trash2 size={16} /> Descarte
+        </Link>
+        <Link
+          href="/estoque/entrada"
+          className="flex items-center gap-2 bg-green-600 text-white px-5 py-3.5 rounded-2xl shadow-lg font-semibold text-sm active:scale-95 transition-all"
+        >
+          <Plus size={18} /> Entrada de Estoque
+        </Link>
+      </div>
+    </div>
+  )
+}
