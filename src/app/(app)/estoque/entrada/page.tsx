@@ -78,8 +78,13 @@ export default function EntradaEstoquePage() {
     let targets: { insumo: any; cu: number | null }[] = []
 
     if (isBaseGrupo) {
-      const tipos = ['placa_plastico', 'placa_metal', 'plastico_protecao']
-      const cu = vp > 0 ? vp / 3 / qtdNum : null
+      // Material completo: entra também o ímã magnético (4 tipos, custo dividido por 4)
+      // Material sem ímã: só as 3 placas (ímã será comprado separadamente)
+      const tipos = tipoCompra === 'completo'
+        ? ['placa_plastico', 'placa_metal', 'plastico_protecao', 'ima_magnetico']
+        : ['placa_plastico', 'placa_metal', 'plastico_protecao']
+      const divisor = tipoCompra === 'completo' ? 4 : 3
+      const cu = vp > 0 ? vp / divisor / qtdNum : null
       tipos.forEach(tipo => {
         const ins = insumos.find(i => i.tipo === tipo)
         if (ins) targets.push({ insumo: ins, cu })
@@ -289,14 +294,17 @@ export default function EntradaEstoquePage() {
               </p>
               <p className="text-base font-bold text-blue-700">{fmt(custoUnitario)}</p>
             </div>
-            {isBaseGrupo && tipoCompra === 'sem_ima' && (
+            {isBaseGrupo && (
               <div className="flex justify-between items-center">
-                <p className="text-xs text-blue-600">Contribuição por ímã (3 componentes)</p>
-                <p className="text-sm font-semibold text-blue-600">{fmt(custoUnitario * 3)}</p>
+                <p className="text-xs text-blue-600">
+                  {tipoCompra === 'completo'
+                    ? 'Custo por ímã completo (4 componentes)'
+                    : 'Contribuição por ímã (3 componentes)'}
+                </p>
+                <p className="text-sm font-semibold text-blue-600">
+                  {fmt(tipoCompra === 'completo' ? custoUnitario * 4 : custoUnitario * 3)}
+                </p>
               </div>
-            )}
-            {isBaseGrupo && tipoCompra === 'completo' && (
-              <p className="text-xs text-blue-600">Ímã já incorporado — não será lançado separadamente</p>
             )}
           </div>
         )}
