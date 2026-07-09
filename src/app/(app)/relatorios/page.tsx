@@ -11,8 +11,9 @@ import Link from 'next/link'
 import {
   ChevronDown, ArrowUpRight, ArrowDownRight,
   TrendingUp, Heart, Download, ChevronRight, Lightbulb,
-  MessageCircle, MapPin, Users, Target,
+  MessageCircle, MapPin, Users, Target, AlertTriangle, Package,
 } from 'lucide-react'
+import { calcularConsumo } from '@/lib/utils/estoque'
 
 // ── CONSTANTES ─────────────────────────────────────────────────────────────
 const MESES = [
@@ -21,7 +22,8 @@ const MESES = [
 ]
 
 type Gran     = 'mes' | 'semana' | 'dia'
-type Aba      = 'geral' | 'fin' | 'cli'
+type Aba      = 'geral' | 'fin' | 'cli' | 'est'
+type SubEst   = 'visao' | 'consumo' | 'invest' | 'giro' | 'reposicao' | 'capacidade' | 'curvaABC' | 'insights'
 type SubCli   = 'visao' | 'crescimento' | 'fidelizacao' | 'ranking' | 'inativos' | 'localizacao' | 'ticket' | 'insights' | 'oportunidades'
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -121,6 +123,7 @@ export default function RelatoriosPage() {
   const hoje  = new Date()
   const [aba,        setAba]        = useState<Aba>('geral')
   const [subAbaCli,  setSubAbaCli]  = useState<SubCli>('visao')
+  const [subAbaEst,  setSubAbaEst]  = useState<SubEst>('visao')
   const [mes,        setMes]        = useState(hoje.getMonth())
   const [ano,        setAno]        = useState(hoje.getFullYear())
   const [open,       setOpen]       = useState(false)
@@ -133,6 +136,8 @@ export default function RelatoriosPage() {
   const [financeiro,     setFinanceiro]     = useState<any[]>([])
   const [movEstoque,     setMovEstoque]     = useState<any[]>([])
   const [custosProducao, setCustosProducao] = useState<any[]>([])
+  const [insumos,        setInsumos]        = useState<any[]>([])
+  const [tamanhoKits,   setTamanhoKits]   = useState<number[]>([])
 
   useEffect(() => {
     async function carregar() {
@@ -158,6 +163,15 @@ export default function RelatoriosPage() {
           .select('id,data,descricao,valor')
           .eq('empresa_id', eid).order('data'),
       ])
+
+      // insumos + kit sizes (for estoque tab)
+      const [{ data: ins }, { data: kits }] = await Promise.all([
+        supabase.from('insumos').select('id,tipo,nome,unidade,quantidade,estoque_minimo,custo_unitario').eq('empresa_id', eid).order('nome'),
+        supabase.from('pedidos').select('qtd_imas').eq('empresa_id', eid).gt('qtd_imas', 0),
+      ])
+      setInsumos(ins || [])
+      const ktUnicos = [...new Set((kits || []).map((p: any) => Number(p.qtd_imas)))].filter(v => v > 0).sort((a,b)=>a-b)
+      setTamanhoKits(ktUnicos)
 
       setPedidos(peds || [])
       setClientes(cls || [])
@@ -538,6 +552,229 @@ export default function RelatoriosPage() {
     URL.revokeObjectURL(url)
   }
 
+
+  // ── ESTOQUE: CATEGORIAS ────────────────────────────────────────────────────
+  const TIPOS_IMA_SET = new Set(['ima_magnetico','placa_plastico','placa_metal','plastico_protecao'])
+  const catInsumo = (tipo: string) => TIPOS_IMA_SET.has(tipo) ? 'Imas' : tipo === 'folha_impressao' ? 'Impressao' : 'Embalagens'
+
+  // ── ESTOQUE: MOV DO MÊS ──────────────────────────────────────────────────
+  const movEstMes  = useMemo(() => movEstoque.filter(m => inDate(m.data, inicioStr, fimStr)), [movEstoque, inicioStr, fimStr])
+  const consumoEst = useMemo(() => movEstMes.filter(m => m.tipo === 'saida'),   [movEstMes])
+  const comprasEst = useMemo(() => movEstMes.filter(m => m.tipo === 'entrada'), [movEstMes])
+
+  // total movimentacoes historico para giro/abc/reposicao
+  const consumoTotal = useMemo(() => movEstoque.filter(m => m.tipo === 'saida'), [movEstoque])
+
+  // ── CONSUMO POR MATERIAL (período) ────────────────────────────────────────
+  const consumoPorMat = useMemo(() => {
+    const map: Record<string, { nome: string; tipo: string; qtd: number }> = {}
+    consumoEst.forEach(m => {
+      const key  = m.insumo_id || m.insumos?.id || m.insumos?.nome || 'x'
+      const nome = m.insumos?.nome || 'Desconhecido'
+      const tipo = m.insumos?.tipo || ''
+      if (!map[key]) map[key] = { nome, tipo, qtd: 0 }
+      map[key].qtd += Number(m.quantidade || 0)
+    })
+    return Object.values(map).sort((a, b) => b.qtd - a.qtd)
+  }, [consumoEst])
+
+  // consumo total por material (histórico — para curva ABC)
+  const consumoHistPorMat = useMemo(() => {
+    const map: Record<string, { nome: string; tipo: string; qtd: number }> = {}
+    consumoTotal.forEach(m => {
+      const key  = m.insumo_id || m.insumos?.id || m.insumos?.nome || 'x'
+      const nome = m.insumos?.nome || 'Desconhecido'
+      const tipo = m.insumos?.tipo || ''
+      if (!map[key]) map[key] = { nome, tipo, qtd: 0 }
+      map[key].qtd += Number(m.quantidade || 0)
+    })
+    return Object.values(map).sort((a, b) => b.qtd - a.qtd)
+  }, [consumoTotal])
+
+  // ── INVESTIMENTO POR CATEGORIA ────────────────────────────────────────────
+  const investPorCat = useMemo(() => {
+    const map: Record<string, number> = {}
+    comprasEst.forEach(m => {
+      if (!m.valor_pago) return
+      const cat = catInsumo(m.insumos?.tipo || '')
+      map[cat] = (map[cat] || 0) + Number(m.valor_pago || 0)
+    })
+    const CORES: Record<string,string> = { Imas: '#b5005e', Embalagens: '#3b82f6', Impressao: '#f59e0b' }
+    return Object.entries(map).sort(([,a],[,b])=>b-a).map(([cat,val])=>({ cat, val, cor: CORES[cat] || '#8b5cf6' }))
+  }, [comprasEst])
+
+  const investMensal = useMemo(() => {
+    const map: Record<string, number> = {}
+    movEstoque.filter(m => m.tipo === 'entrada' && m.valor_pago).forEach(m => {
+      const ds = (m.data || '').split('T')[0]; if (!ds || ds.length < 7) return
+      const key = ds.slice(0,7)
+      map[key] = (map[key] || 0) + Number(m.valor_pago || 0)
+    })
+    return Object.entries(map).sort(([a],[b])=>a.localeCompare(b)).slice(-12)
+      .map(([k,v]) => ({ periodo: fmtMesLabel(k), valor: v }))
+  }, [movEstoque])
+
+  // ── STATUS (crítico/baixo) ────────────────────────────────────────────────
+  function calcStatusEst(ins: any): 'critico' | 'baixo' | 'normal' {
+    const qtd = Number(ins.quantidade || 0)
+    const min = Number(ins.estoque_minimo || 0)
+    if (qtd === 0 || (min > 0 && qtd < min * 0.5)) return 'critico'
+    if (min > 0 && qtd < min) return 'baixo'
+    return 'normal'
+  }
+
+  const criticos = useMemo(() => insumos.filter(i => calcStatusEst(i) === 'critico'), [insumos])
+  const baixos   = useMemo(() => insumos.filter(i => calcStatusEst(i) === 'baixo'),   [insumos])
+  const valorEstTotal = useMemo(() => insumos.reduce((s,i) => s + Number(i.quantidade||0)*Number(i.custo_unitario||0), 0), [insumos])
+
+  // ── CONSUMO POR PERÍODO ────────────────────────────────────────────────────
+  const consumoMensal = useMemo(() => {
+    const map: Record<string, number> = {}
+    consumoTotal.forEach(m => {
+      const ds = (m.data||'').split('T')[0]; if (!ds || ds.length < 7) return
+      map[ds.slice(0,7)] = (map[ds.slice(0,7)] || 0) + Number(m.quantidade || 0)
+    })
+    return Object.entries(map).sort(([a],[b])=>a.localeCompare(b)).slice(-12)
+      .map(([k,v]) => ({ periodo: fmtMesLabel(k), valor: v }))
+  }, [consumoTotal])
+
+  // ── GIRO ──────────────────────────────────────────────────────────────────
+  const giroMateriais = useMemo(() => {
+    const map: Record<string, { nome: string; saidas: number; entradas: number; ultimaData: string | null }> = {}
+    movEstoque.forEach(m => {
+      const key  = m.insumo_id || m.insumos?.nome || 'x'
+      const nome = m.insumos?.nome || 'Desconhecido'
+      if (!map[key]) map[key] = { nome, saidas: 0, entradas: 0, ultimaData: null }
+      if (m.tipo === 'saida')   map[key].saidas   += Number(m.quantidade || 0)
+      if (m.tipo === 'entrada') map[key].entradas += Number(m.quantidade || 0)
+      if (!map[key].ultimaData || m.data > map[key].ultimaData!) map[key].ultimaData = m.data
+    })
+    return Object.values(map).sort((a,b)=>b.saidas-a.saidas)
+  }, [movEstoque])
+
+  // ── REPOSIÇÃO SUGERIDA ────────────────────────────────────────────────────
+  const reposicaoSugerida = useMemo(() => {
+    const d30 = new Date(); d30.setDate(d30.getDate()-30)
+    const d30Str = d30.toISOString().split('T')[0]
+    const ultimos30 = movEstoque.filter(m => m.tipo === 'saida' && m.data >= d30Str)
+    const consMap: Record<string, number> = {}
+    ultimos30.forEach(m => {
+      const key = m.insumo_id || m.insumos?.id || ''
+      if (!key) return
+      consMap[key] = (consMap[key] || 0) + Number(m.quantidade || 0)
+    })
+    return insumos.map(ins => {
+      const totalCons = consMap[ins.id] || 0
+      if (totalCons <= 0) return null
+      const diario = totalCons / 30
+      const diasRest = Math.floor(Number(ins.quantidade || 0) / diario)
+      return { nome: ins.nome, qtdAtual: Number(ins.quantidade||0), unidade: ins.unidade, diario: Math.round(diario*10)/10, diasRest, urgente: diasRest <= 15 }
+    }).filter(Boolean).sort((a,b) => (a!.diasRest) - (b!.diasRest))
+  }, [insumos, movEstoque])
+
+  // ── CAPACIDADE DE PRODUÇÃO ────────────────────────────────────────────────
+  const capacidadeProducao = useMemo(() => {
+    const insumoMap: Record<string, any> = {}
+    insumos.forEach(i => { insumoMap[i.tipo] = i })
+    const sizes = tamanhoKits.length > 0 ? tamanhoKits : [6,12,18]
+    return sizes.map(ktSize => {
+      const consumo = calcularConsumo(ktSize, 12)
+      let cap = Infinity; let limitante = ''
+      for (const [tipo, qtdPorKit] of Object.entries(consumo)) {
+        if ((qtdPorKit as number) <= 0) continue
+        const disp = Number(insumoMap[tipo]?.quantidade || 0)
+        const c = Math.floor(disp / (qtdPorKit as number))
+        if (c < cap) { cap = c; limitante = insumoMap[tipo]?.nome || tipo }
+      }
+      return { nome: `Kit ${ktSize} imas`, capacidade: cap === Infinity ? 0 : cap, limitante }
+    })
+  }, [insumos, tamanhoKits])
+
+  // ── CURVA ABC ────────────────────────────────────────────────────────────
+  const curvaABC = useMemo(() => {
+    const tot = consumoHistPorMat.reduce((s,i) => s+i.qtd, 0)
+    let acum = 0
+    return consumoHistPorMat.map(item => {
+      acum += item.qtd
+      const pctAcum = tot > 0 ? (acum/tot)*100 : 0
+      const classe = pctAcum <= 80 ? 'A' : pctAcum <= 95 ? 'B' : 'C'
+      return { ...item, pct: tot > 0 ? Math.round((item.qtd/tot)*100) : 0, pctAcum: Math.round(pctAcum), classe }
+    })
+  }, [consumoHistPorMat])
+
+  const qtdA = curvaABC.filter(i=>i.classe==='A').length
+  const qtdB = curvaABC.filter(i=>i.classe==='B').length
+  const qtdC = curvaABC.filter(i=>i.classe==='C').length
+
+  // ── INSIGHTS ESTOQUE ──────────────────────────────────────────────────────
+  const insightsEstoque = useMemo(() => {
+    const list: { emoji:string; texto:string; tipo:'ok'|'neutro'|'alerta' }[] = []
+    if (criticos.length > 0) list.push({ emoji:'🔴', tipo:'alerta', texto:`${criticos.length} material(is) em estoque critico. Reposicao urgente necessaria.` })
+    if (baixos.length > 0)   list.push({ emoji:'🟡', tipo:'alerta', texto:`${baixos.length} material(is) com estoque baixo.` })
+    if (consumoPorMat.length > 0) {
+      const top = consumoPorMat[0]
+      const tot = consumoPorMat.reduce((s,m)=>s+m.qtd,0)
+      const p   = tot > 0 ? Math.round((top.qtd/tot)*100) : 0
+      list.push({ emoji:'📦', tipo:'neutro', texto:`${top.nome} representa ${p}% do consumo total no periodo.` })
+    }
+    const urg = reposicaoSugerida.filter(r=>r && r.diasRest<=10)
+    urg.slice(0,3).forEach(r=>{ if(r) list.push({ emoji:'⚠️', tipo:'alerta', texto:`O estoque de ${r.nome} deve acabar em aproximadamente ${r.diasRest} dias.` }) })
+    const invMes = comprasEst.reduce((s,m)=>s+Number(m.valor_pago||0),0)
+    const invAntMes = movEstoque.filter(m=>m.tipo==='entrada'&&m.valor_pago&&inDate(m.data,inicioAntStr,fimAntStr)).reduce((s,m)=>s+Number(m.valor_pago||0),0)
+    const dInv = pct(invMes, invAntMes)
+    if (dInv !== null && dInv !== 0) list.push({ emoji:'💰', tipo: dInv>0?'alerta':'ok', texto:`O investimento em estoque ${dInv>0?`aumentou ${dInv}%`:`reduziu ${Math.abs(dInv)}%`} em relacao ao mes anterior.` })
+    if (qtdA > 0) list.push({ emoji:'📊', tipo:'neutro', texto:`${qtdA} material(is) classificado(s) como Classe A (maior consumo historico).` })
+    if (criticos.length===0 && baixos.length===0) list.push({ emoji:'🟢', tipo:'ok', texto:'Nenhum material em estado critico ou baixo no momento.' })
+    return list
+  }, [criticos, baixos, consumoPorMat, reposicaoSugerida, comprasEst, movEstoque, inicioAntStr, fimAntStr, qtdA])
+
+  // ── EXPORT ESTOQUE ────────────────────────────────────────────────────────
+  function exportarCSVEstoque() {
+    const rows = [
+      ['Material','Estoque Atual','Unidade','Status','Custo Unit.','Valor em Estoque'],
+      ...insumos.map(i => [
+        i.nome,
+        String(Number(i.quantidade||0).toFixed(1)),
+        i.unidade||'',
+        calcStatusEst(i),
+        String(Number(i.custo_unitario||0).toFixed(2)),
+        String((Number(i.quantidade||0)*Number(i.custo_unitario||0)).toFixed(2)),
+      ])
+    ]
+    const blob = new Blob(['﻿'+rows.map(r=>r.join(';')).join('\n')],{type:'text/csv;charset=utf-8;'})
+    const url=URL.createObjectURL(blob);const a=document.createElement('a')
+    a.href=url;a.download=`estoque-bi-${MESES[mes]}-${ano}.csv`.toLowerCase();a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function exportarPDFEstoque() {
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    doc.setFontSize(16); doc.setTextColor(181,0,94)
+    doc.text('Relatorio de Estoque — Reviva Imas', 14, 18)
+    doc.setFontSize(10); doc.setTextColor(100,100,100)
+    doc.text(`Periodo: ${MESES[mes]} ${ano}`, 14, 26)
+    doc.text(`Total de insumos: ${insumos.length}  |  Criticos: ${criticos.length}  |  Baixos: ${baixos.length}`, 14, 33)
+    doc.text(`Valor total em estoque: R$ ${valorEstTotal.toFixed(2).replace('.',',')}`, 14, 40)
+    let y = 52
+    doc.setFontSize(11); doc.setTextColor(30,30,30)
+    doc.text('Material', 14, y); doc.text('Qtd', 80, y); doc.text('Status', 110, y); doc.text('Valor', 155, y)
+    doc.setDrawColor(200,200,200); doc.line(14, y+2, 196, y+2); y += 8
+    doc.setFontSize(9)
+    insumos.forEach(i => {
+      if (y > 270) { doc.addPage(); y = 20 }
+      const st = calcStatusEst(i)
+      doc.setTextColor(st==='critico'?[200,0,0]:st==='baixo'?[180,130,0]:[40,40,40] as any)
+      doc.text((i.nome||'').slice(0,35), 14, y)
+      doc.setTextColor(40,40,40)
+      doc.text(`${Number(i.quantidade||0).toFixed(1)} ${i.unidade||''}`, 80, y)
+      doc.text(st, 110, y)
+      doc.text(`R$ ${(Number(i.quantidade||0)*Number(i.custo_unitario||0)).toFixed(2).replace('.',',')}`, 155, y)
+      y += 7
+    })
+    doc.save(`estoque-bi-${MESES[mes]}-${ano}.pdf`.toLowerCase())
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="w-8 h-8 border-2 border-[#b5005e] border-t-transparent rounded-full animate-spin" />
@@ -630,7 +867,7 @@ export default function RelatoriosPage() {
       {/* ABAS PRINCIPAIS */}
       <div className="px-4 mb-4">
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-          {([['geral','📊 Geral'],['fin','💰 Financeiro'],['cli','👥 Clientes']] as [Aba,string][]).map(([id,label]) => (
+          {([['geral','📊 Geral'],['fin','💰 Fin.'],['cli','👥 Cli.'],['est','📦 Est.']] as [Aba,string][]).map(([id,label]) => (
             <button key={id} onClick={() => setAba(id)}
               className={`flex-1 py-2 rounded-lg text-[11px] font-bold transition-all ${aba === id ? 'bg-white text-[#b5005e] shadow-sm' : 'text-gray-500'}`}>
               {label}
@@ -1445,6 +1682,410 @@ export default function RelatoriosPage() {
             )}
           </>}
 
+        </>}
+
+        {/* ══ ABA: ESTOQUE ═══════════════════════════════════════════════ */}
+        {aba === 'est' && <>
+          {/* Sub-nav */}
+          <div className="overflow-x-auto -mx-4 px-4 pb-1">
+            <div className="flex gap-1.5 min-w-max">
+              {([
+                ['visao','📦 Visao Geral'],['consumo','📈 Consumo'],['invest','💰 Investimento'],
+                ['giro','🔄 Giro'],['reposicao','🚚 Reposicao'],['capacidade','🏭 Capacidade'],
+                ['curvaABC','📊 Curva ABC'],['insights','💡 Insights'],
+              ] as [SubEst,string][]).map(([id,label]) => (
+                <button key={id} onClick={() => setSubAbaEst(id)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
+                    subAbaEst === id ? 'bg-[#b5005e] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-500'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 1 VISÃO GERAL */}
+          {subAbaEst === 'visao' && <>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-gradient-to-br from-[#b5005e] to-pink-700 rounded-2xl p-4 text-white col-span-2">
+                <p className="text-xs text-pink-200 mb-0.5">📦 Valor Total em Estoque</p>
+                <p className="text-3xl font-bold">{formatCurrency(valorEstTotal)}</p>
+                <p className="text-[10px] text-pink-200 mt-1">{insumos.length} insumo(s) cadastrado(s)</p>
+              </div>
+              <div className={`rounded-2xl border shadow-sm p-4 ${criticos.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <AlertTriangle size={12} className={criticos.length > 0 ? 'text-red-500' : 'text-green-500'} />
+                  <p className={`text-xs font-semibold ${criticos.length > 0 ? 'text-red-600' : 'text-green-600'}`}>Criticos</p>
+                </div>
+                <p className={`text-3xl font-bold ${criticos.length > 0 ? 'text-red-700' : 'text-green-700'}`}>{criticos.length}</p>
+              </div>
+              <div className={`rounded-2xl border shadow-sm p-4 ${baixos.length > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+                <p className={`text-xs font-semibold mb-0.5 ${baixos.length > 0 ? 'text-yellow-600' : 'text-green-600'}`}>🟡 Estoque Baixo</p>
+                <p className={`text-3xl font-bold ${baixos.length > 0 ? 'text-yellow-700' : 'text-green-700'}`}>{baixos.length}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <p className="text-xs text-gray-400 mb-0.5">📈 Movimentacoes</p>
+                <p className="text-2xl font-bold text-gray-900">{movEstMes.length}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{MESES[mes]}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <p className="text-xs text-gray-400 mb-0.5">📦 Total Insumos</p>
+                <p className="text-2xl font-bold text-gray-900">{insumos.length}</p>
+              </div>
+            </div>
+            {/* Lista de criticos */}
+            {criticos.length > 0 && (
+              <div className="bg-red-50 rounded-2xl border border-red-200 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle size={15} className="text-red-500" />
+                  <p className="text-sm font-bold text-red-700">Materiais Criticos</p>
+                </div>
+                <div className="space-y-2">
+                  {criticos.map(i => (
+                    <div key={i.id} className="flex items-center justify-between bg-white rounded-xl px-3 py-2">
+                      <p className="text-sm font-semibold text-gray-800">{i.nome}</p>
+                      <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                        {Number(i.quantidade||0).toFixed(1)} {i.unidade}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Lista todos os insumos */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-4 pt-4 pb-2 border-b border-gray-50">
+                <p className="text-sm font-bold text-gray-800">Todos os Insumos</p>
+              </div>
+              {insumos.map(i => {
+                const st = calcStatusEst(i)
+                const stCor = st==='critico' ? 'bg-red-500' : st==='baixo' ? 'bg-yellow-400' : 'bg-green-400'
+                const valEst = Number(i.quantidade||0)*Number(i.custo_unitario||0)
+                return (
+                  <div key={i.id} className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 first:border-0">
+                    <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${stCor}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{i.nome}</p>
+                      <p className="text-[10px] text-gray-400">{catInsumo(i.tipo||'')} · min: {i.estoque_minimo||0}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-900">{Number(i.quantidade||0).toFixed(1)} {i.unidade}</p>
+                      <p className="text-[10px] text-gray-400">{formatCurrency(valEst)}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={exportarCSVEstoque}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">
+                <Download size={13} /> Excel
+              </button>
+              <button onClick={exportarPDFEstoque}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-[#b5005e] text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">
+                <Download size={13} /> PDF
+              </button>
+            </div>
+          </>}
+
+          {/* 2 CONSUMO */}
+          {subAbaEst === 'consumo' && <>
+            {consumoPorMat.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center">
+                <p className="text-4xl mb-3">📦</p>
+                <p className="text-sm text-gray-500">Nenhum consumo em {MESES[mes]}</p>
+              </div>
+            ) : (<>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <p className="text-sm font-bold text-gray-800 mb-3">📈 Mais consumidos — {MESES[mes]}</p>
+                <div className="space-y-3">
+                  {consumoPorMat.map((m,i) => {
+                    const tot = consumoPorMat.reduce((s,x)=>s+x.qtd,0)
+                    const p   = tot > 0 ? Math.round((m.qtd/tot)*100) : 0
+                    return (
+                      <div key={m.nome}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-gray-700 truncate max-w-[55%]">{m.nome}</span>
+                          <span className="text-xs text-gray-500">{m.qtd.toFixed(1)} · {p}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-2 rounded-full" style={{ width:`${p}%`, backgroundColor: ['#b5005e','#3b82f6','#10b981','#f59e0b','#8b5cf6'][i]||'#94a3b8' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+              {consumoMensal.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <p className="text-sm font-bold text-gray-800 mb-3">📊 Consumo por mes (total de unidades)</p>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={consumoMensal}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                      <XAxis dataKey="periodo" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 9 }} width={36} />
+                      <Tooltip formatter={(v:any)=>[Number(v).toFixed(1),'Unidades']} />
+                      <Bar dataKey="valor" fill="#b5005e" radius={[4,4,0,0]} name="Consumo" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {consumoPorMat.length >= 3 && (
+                <div className="bg-blue-50 rounded-2xl border border-blue-200 p-4">
+                  <p className="text-xs font-bold text-blue-700 mb-2">📉 Menos consumidos</p>
+                  <div className="space-y-1.5">
+                    {[...consumoPorMat].reverse().slice(0,3).map(m => (
+                      <div key={m.nome} className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-blue-800">{m.nome}</p>
+                        <p className="text-xs text-blue-600">{m.qtd.toFixed(1)} un</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>)}
+          </>}
+
+          {/* 3 INVESTIMENTO */}
+          {subAbaEst === 'invest' && <>
+            {investPorCat.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center">
+                <p className="text-4xl mb-3">💰</p>
+                <p className="text-sm text-gray-500">Nenhuma compra em {MESES[mes]}</p>
+              </div>
+            ) : (<>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <p className="text-sm font-bold text-gray-800 mb-4">💰 Investimento por Categoria — {MESES[mes]}</p>
+                <ComposicaoBar items={investPorCat.map(c=>({nome:c.cat,valor:c.val,cor:c.cor}))} total={investPorCat.reduce((s,c)=>s+c.val,0)} />
+              </div>
+              {investMensal.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <p className="text-sm font-bold text-gray-800 mb-3">📈 Evolucao do Investimento</p>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={investMensal}>
+                      <defs>
+                        <linearGradient id="gInvEst" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#b5005e" stopOpacity={0.2} />
+                          <stop offset="95%" stopColor="#b5005e" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                      <XAxis dataKey="periodo" tick={{ fontSize: 9 }} />
+                      <YAxis tick={{ fontSize: 9 }} tickFormatter={v=>`R$${(v/1000).toFixed(0)}k`} width={44} />
+                      <Tooltip formatter={(v:any)=>[formatCurrency(Number(v)),'Investimento']} />
+                      <Area type="monotone" dataKey="valor" stroke="#b5005e" fill="url(#gInvEst)" strokeWidth={2.5} dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </>)}
+          </>}
+
+          {/* 4 GIRO */}
+          {subAbaEst === 'giro' && <>
+            {giroMateriais.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center"><p className="text-4xl mb-3">🔄</p><p className="text-sm text-gray-500">Sem movimentacoes</p></div>
+            ) : (<>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 pt-4 pb-2 border-b border-gray-50">
+                  <p className="text-sm font-bold text-gray-800">🔄 Materiais por Giro</p>
+                  <p className="text-xs text-gray-400">Ordenado por maior consumo historico</p>
+                </div>
+                {giroMateriais.map((g,i) => {
+                  const dias = g.ultimaData ? diasAtras(g.ultimaData) : null
+                  const parado = dias !== null && dias > 30
+                  return (
+                    <div key={g.nome} className="flex items-center gap-3 px-4 py-3 border-t border-gray-50 first:border-0">
+                      <span className={`w-2 h-8 rounded-full flex-shrink-0 ${i===0?'bg-[#b5005e]':i<=2?'bg-orange-400':'bg-gray-200'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{g.nome}</p>
+                        <p className="text-[10px] text-gray-400">
+                          {g.saidas.toFixed(1)} saidas · {g.entradas.toFixed(1)} entradas
+                          {g.ultimaData && <> · ult: {fmtData(g.ultimaData)}</>}
+                        </p>
+                      </div>
+                      {parado && <span className="text-[10px] bg-orange-100 text-orange-600 font-bold px-2 py-0.5 rounded-full">{dias}d parado</span>}
+                    </div>
+                  )
+                })}
+              </div>
+              {/* sem movimentacao */}
+              {(() => { const semMov = insumos.filter(i=>!giroMateriais.find(g=>g.nome===i.nome)); return semMov.length > 0 ? (
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4">
+                  <p className="text-xs font-bold text-gray-500 mb-2">⏸ Sem movimentacao registrada</p>
+                  <div className="space-y-1">
+                    {semMov.map(i=><p key={i.id} className="text-xs text-gray-600">{i.nome}</p>)}
+                  </div>
+                </div>
+              ) : null })()}
+            </>)}
+          </>}
+
+          {/* 5 REPOSIÇÃO */}
+          {subAbaEst === 'reposicao' && <>
+            {reposicaoSugerida.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center">
+                <p className="text-4xl mb-3">🚚</p>
+                <p className="text-sm text-gray-500">Sem dados de consumo suficientes para previsao</p>
+                <p className="text-xs text-gray-400 mt-1">Necessario pelo menos 1 saida nos ultimos 30 dias</p>
+              </div>
+            ) : (<>
+              <div className="bg-orange-50 rounded-2xl border border-orange-200 p-4">
+                <p className="text-xs font-bold text-orange-700 mb-1">🚚 Reposicao Sugerida</p>
+                <p className="text-[10px] text-orange-500">Baseado no consumo medio dos ultimos 30 dias</p>
+              </div>
+              <div className="space-y-2.5">
+                {reposicaoSugerida.map((r,i) => {
+                  if (!r) return null
+                  const urgente = r.diasRest <= 10
+                  const moderado = r.diasRest <= 20 && !urgente
+                  return (
+                    <div key={i} className={`rounded-2xl border p-4 ${urgente?'bg-red-50 border-red-200':moderado?'bg-orange-50 border-orange-200':'bg-white border-gray-100 shadow-sm'}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className={`text-sm font-bold ${urgente?'text-red-700':moderado?'text-orange-700':'text-gray-900'}`}>
+                          {urgente?'⚠️':moderado?'🟡':'🟢'} {r.nome}
+                        </p>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${urgente?'bg-red-100 text-red-700':moderado?'bg-orange-100 text-orange-700':'bg-green-100 text-green-700'}`}>
+                          {r.diasRest} dias
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-gray-500">Estoque: {r.qtdAtual.toFixed(1)} {r.unidade}</p>
+                        <p className="text-[10px] text-gray-500">Consumo: ~{r.diario}/dia</p>
+                      </div>
+                      {/* barra de urgencia */}
+                      <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-1.5 rounded-full ${urgente?'bg-red-500':moderado?'bg-orange-400':'bg-green-400'}`}
+                          style={{ width: `${Math.min(100, Math.round((r.diasRest/60)*100))}%` }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>)}
+          </>}
+
+          {/* 6 CAPACIDADE */}
+          {subAbaEst === 'capacidade' && <>
+            <div className="bg-gradient-to-br from-[#b5005e] to-pink-700 rounded-2xl p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Package size={16} />
+                <p className="font-bold text-sm">Capacidade de Producao</p>
+              </div>
+              <p className="text-xs text-pink-200">Com base no estoque atual de insumos</p>
+            </div>
+            {capacidadeProducao.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center">
+                <p className="text-4xl mb-3">🏭</p>
+                <p className="text-sm text-gray-500">Nenhum pedido com imas registrado para calcular capacidade</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {capacidadeProducao.map(c => {
+                  const urg = c.capacidade < 5
+                  return (
+                    <div key={c.nome} className={`rounded-2xl border p-4 ${urg?'bg-red-50 border-red-200':'bg-white border-gray-100 shadow-sm'}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-sm font-bold text-gray-900">{c.nome}</p>
+                        <span className={`text-2xl font-bold ${urg?'text-red-600':'text-green-700'}`}>{c.capacidade}</span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {c.capacidade === 0 ? '🔴 Impossivel produzir — sem estoque suficiente' : `${c.capacidade} unidade(s) possiveis`}
+                      </p>
+                      {c.limitante && (
+                        <p className="text-[10px] text-orange-600 mt-1 font-semibold">
+                          Material limitante: {c.limitante}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>}
+
+          {/* 7 CURVA ABC */}
+          {subAbaEst === 'curvaABC' && <>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-[#b5005e] rounded-2xl p-3 text-center text-white">
+                <p className="text-2xl font-bold">{qtdA}</p>
+                <p className="text-xs text-pink-200">Classe A</p>
+                <p className="text-[10px] text-pink-300">80% consumo</p>
+              </div>
+              <div className="bg-blue-600 rounded-2xl p-3 text-center text-white">
+                <p className="text-2xl font-bold">{qtdB}</p>
+                <p className="text-xs text-blue-200">Classe B</p>
+                <p className="text-[10px] text-blue-300">15% consumo</p>
+              </div>
+              <div className="bg-gray-400 rounded-2xl p-3 text-center text-white">
+                <p className="text-2xl font-bold">{qtdC}</p>
+                <p className="text-xs text-gray-100">Classe C</p>
+                <p className="text-[10px] text-gray-200">5% consumo</p>
+              </div>
+            </div>
+            {curvaABC.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl p-8 text-center"><p className="text-4xl mb-3">📊</p><p className="text-sm text-gray-500">Sem historico de consumo para classificar</p></div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 pt-4 pb-2 border-b border-gray-50">
+                  <p className="text-sm font-bold text-gray-800">📊 Classificacao ABC</p>
+                  <p className="text-xs text-gray-400">Baseado no consumo historico total</p>
+                </div>
+                {curvaABC.map(item => {
+                  const corClasse = item.classe==='A'?'bg-[#b5005e] text-white':item.classe==='B'?'bg-blue-600 text-white':'bg-gray-300 text-gray-700'
+                  return (
+                    <div key={item.nome} className="flex items-center gap-3 px-4 py-2.5 border-t border-gray-50 first:border-0">
+                      <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${corClasse}`}>{item.classe}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate">{item.nome}</p>
+                        <div className="w-full h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                          <div className="h-1 rounded-full" style={{ width:`${item.pct}%`, backgroundColor: item.classe==='A'?'#b5005e':item.classe==='B'?'#3b82f6':'#9ca3af' }} />
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs font-bold text-gray-900">{item.pct}%</p>
+                        <p className="text-[10px] text-gray-400">acum: {item.pctAcum}%</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>}
+
+          {/* 8 INSIGHTS */}
+          {subAbaEst === 'insights' && <>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Lightbulb size={18} className="text-yellow-500" />
+                <p className="text-sm font-bold text-gray-800">Insights do Estoque</p>
+              </div>
+              {insightsEstoque.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">Sem dados suficientes</p>
+              ) : (
+                <div className="space-y-2">
+                  {insightsEstoque.map((ins,i) => (
+                    <div key={i} className={`flex items-start gap-2.5 p-3 rounded-xl text-xs leading-relaxed ${
+                      ins.tipo==='ok'?'bg-green-50 text-green-800':ins.tipo==='alerta'?'bg-red-50 text-red-800':'bg-gray-50 text-gray-700'
+                    }`}>
+                      <span className="text-base flex-shrink-0">{ins.emoji}</span>
+                      <span>{ins.texto}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={exportarCSVEstoque}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">
+                <Download size={13} /> Excel
+              </button>
+              <button onClick={exportarPDFEstoque}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-[#b5005e] text-white text-xs font-bold py-2.5 rounded-xl active:scale-95 transition-all">
+                <Download size={13} /> PDF
+              </button>
+            </div>
+          </>}
         </>}
 
       </div>
