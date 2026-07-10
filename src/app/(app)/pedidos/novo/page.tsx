@@ -47,8 +47,8 @@ export default function NovoPedidoPage() {
   const [qtdChaveiroComEsp, setQtdChaveiroComEsp] = useState(0)
   const [custoPorPlaca, setCustoPorPlaca] = useState(0)
 
-  // Tabela de preços dos chaveiros (por faixa de quantidade)
-  function precoChaveiroUn(qtdTotal: number): number {
+  // Tabela de preços dos chaveiros (por faixa de quantidade total)
+  function precoChaveiroComUn(qtdTotal: number): number {
     if (qtdTotal >= 51) return 7.50
     if (qtdTotal >= 31) return 8.50
     if (qtdTotal >= 11) return 9.00
@@ -58,11 +58,22 @@ export default function NovoPedidoPage() {
     if (qtdTotal >= 3)  return 12.90
     return 14.90
   }
+  function precoChaveiroSemUn(qtdTotal: number): number {
+    if (qtdTotal >= 51) return 7.50
+    if (qtdTotal >= 31) return 8.50
+    if (qtdTotal >= 11) return 8.90
+    if (qtdTotal >= 10) return 9.50
+    if (qtdTotal >= 8)  return 10.50
+    if (qtdTotal >= 6)  return 10.90
+    if (qtdTotal >= 3)  return 11.90
+    return 13.90
+  }
 
   const subtotalImas      = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const qtdChaveiroTotal  = qtdChaveiroSem + qtdChaveiroComEsp
-  const precoChavUn       = precoChaveiroUn(qtdChaveiroTotal)
-  const subtotalChaveiro  = qtdChaveiroTotal > 0 ? qtdChaveiroTotal * precoChavUn : 0
+  const precoSemUn        = precoChaveiroSemUn(qtdChaveiroTotal)
+  const precoComUn        = precoChaveiroComUn(qtdChaveiroTotal)
+  const subtotalChaveiro  = qtdChaveiroSem * precoSemUn + qtdChaveiroComEsp * precoComUn
   const subtotal          = subtotalImas + subtotalChaveiro
 
   const descontoParc = parceliaDesconto ? Math.round(subtotal * 0.10 * 100) / 100 : 0
@@ -543,7 +554,7 @@ export default function NovoPedidoPage() {
           <p className="text-sm font-medium text-gray-700">🔑 Chaveiro</p>
           {qtdChaveiroTotal > 0 && (
             <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg">
-              {fmt(precoChavUn)}/un
+              faixa {qtdChaveiroTotal} un
             </span>
           )}
         </div>
@@ -552,7 +563,10 @@ export default function NovoPedidoPage() {
           <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
             <div>
               <p className="text-sm font-medium text-gray-800">Sem espelho</p>
-              <p className="text-xs text-gray-400">custo {fmt(custoPorChaveiro)}/un</p>
+              <p className="text-xs text-gray-400">
+                {qtdChaveiroTotal > 0 ? <span className="text-green-600 font-semibold">{fmt(precoSemUn)}/un</span> : 'preço por faixa'}
+                {' · '}custo {fmt(custoPorChaveiro)}/un
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setQtdChaveiroSem(q => Math.max(0, q - 1))}
@@ -566,7 +580,10 @@ export default function NovoPedidoPage() {
           <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
             <div>
               <p className="text-sm font-medium text-gray-800">Com espelho</p>
-              <p className="text-xs text-gray-400">custo {fmt(custoPorChavCom)}/un</p>
+              <p className="text-xs text-gray-400">
+                {qtdChaveiroTotal > 0 ? <span className="text-green-600 font-semibold">{fmt(precoComUn)}/un</span> : 'preço por faixa'}
+                {' · '}custo {fmt(custoPorChavCom)}/un
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setQtdChaveiroComEsp(q => Math.max(0, q - 1))}
@@ -579,13 +596,21 @@ export default function NovoPedidoPage() {
         </div>
         {qtdChaveiroTotal > 0 && (
           <div className="mt-3 bg-amber-50 rounded-xl px-3 py-2 space-y-1">
-            <div className="flex justify-between">
-              <p className="text-xs font-semibold text-amber-700">{qtdChaveiroTotal} chaveiro{qtdChaveiroTotal > 1 ? 's' : ''} × {fmt(precoChavUn)}</p>
-              <p className="text-xs font-bold text-amber-800">{fmt(subtotalChaveiro)}</p>
-            </div>
-            <div className="flex justify-between">
-              <p className="text-xs text-amber-600">custo material</p>
-              <p className="text-xs text-amber-600">{fmt(custo_chaveiro_mat)}</p>
+            {qtdChaveiroSem > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-amber-700">{qtdChaveiroSem}× sem espelho @ {fmt(precoSemUn)}</span>
+                <span className="font-bold text-amber-800">{fmt(qtdChaveiroSem * precoSemUn)}</span>
+              </div>
+            )}
+            {qtdChaveiroComEsp > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-amber-700">{qtdChaveiroComEsp}× com espelho @ {fmt(precoComUn)}</span>
+                <span className="font-bold text-amber-800">{fmt(qtdChaveiroComEsp * precoComUn)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xs border-t border-amber-200 pt-1 mt-1">
+              <span className="text-amber-600">custo material</span>
+              <span className="text-amber-600">{fmt(custo_chaveiro_mat)}</span>
             </div>
           </div>
         )}
