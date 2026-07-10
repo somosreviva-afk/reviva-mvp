@@ -48,25 +48,17 @@ export default function NovoPedidoPage() {
   const [custoPorPlaca, setCustoPorPlaca] = useState(0)
 
   // Tabela de preços dos chaveiros (por faixa de quantidade total)
-  function precoChaveiroComUn(qtdTotal: number): number {
-    if (qtdTotal >= 51) return 7.50
-    if (qtdTotal >= 31) return 8.50
-    if (qtdTotal >= 11) return 9.00
-    if (qtdTotal >= 10) return 9.90
-    if (qtdTotal >= 8)  return 10.90
-    if (qtdTotal >= 6)  return 11.50
-    if (qtdTotal >= 3)  return 12.90
-    return 14.90
-  }
   function precoChaveiroSemUn(qtdTotal: number): number {
-    if (qtdTotal >= 51) return 7.50
-    if (qtdTotal >= 31) return 8.50
-    if (qtdTotal >= 11) return 8.90
-    if (qtdTotal >= 10) return 9.50
-    if (qtdTotal >= 8)  return 10.50
-    if (qtdTotal >= 6)  return 10.90
-    if (qtdTotal >= 3)  return 11.90
+    if (qtdTotal >= 15) return 9.50
+    if (qtdTotal >= 10) return 10.50
+    if (qtdTotal >= 5)  return 11.50
     return 13.90
+  }
+  function precoChaveiroComUn(qtdTotal: number): number {
+    if (qtdTotal >= 15) return 10.50
+    if (qtdTotal >= 10) return 11.50
+    if (qtdTotal >= 5)  return 12.50
+    return 14.90
   }
 
   const subtotalImas      = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
@@ -182,6 +174,15 @@ export default function NovoPedidoPage() {
         quantidade: 1,
         qtd_imas: p.qtd_imas || 0,
       }])
+    }
+    // Kit Misto: adiciona 2 chaveiros automaticamente
+    const nomeLower = p.nome.toLowerCase()
+    if (nomeLower.includes('misto')) {
+      if (nomeLower.includes('com espelho')) {
+        setQtdChaveiroComEsp(q => q + 2)
+      } else {
+        setQtdChaveiroSem(q => q + 2)
+      }
     }
     setMostrarProdutos(false)
     setBuscaProduto('')
