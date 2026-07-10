@@ -1,5 +1,7 @@
 export interface ConfigMateriais {
   ima_custo: number
+  argola_custo: number
+  espelho_custo: number
   caixa_custo: number
   saquinho_custo: number
   envelope_custo: number
@@ -11,6 +13,8 @@ export interface ConfigMateriais {
 
 export const CONFIG_PADRAO: ConfigMateriais = {
   ima_custo: 3.00,
+  argola_custo: 0.38,
+  espelho_custo: 0.66,
   caixa_custo: 1.23,
   saquinho_custo: 0.35,
   envelope_custo: 0.28,
