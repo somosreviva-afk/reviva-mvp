@@ -41,8 +41,11 @@ export default function NovoPedidoPage() {
   const [isMimo, setIsMimo] = useState(false)
   const [qtdEmbrulhos, setQtdEmbrulhos] = useState(1)
   const [parceliaDesconto, setParceliaDesconto] = useState(false)
-  // qtd_imas manual para encomenda personalizada (produto sem qtd_imas definido)
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
+  // Chaveiro
+  const [qtdChaveiroSem, setQtdChaveiroSem] = useState(0)
+  const [qtdChaveiroComEsp, setQtdChaveiroComEsp] = useState(0)
+  const [custoPorPlaca, setCustoPorPlaca] = useState(0)
 
   const subtotal = itens.reduce((s, i) => s + i.preco_unitario * i.quantidade, 0)
   const descontoParc = parceliaDesconto ? Math.round(subtotal * 0.10 * 100) / 100 : 0
@@ -50,19 +53,40 @@ export default function NovoPedidoPage() {
   const descontoValor = descontoParc + descontoManual
   const freteVal = parseFloat(freteValor) || 0
   const total = Math.max(0, subtotal - descontoValor + freteVal)
-
-  // Mimo: não gera receita, apenas desconta insumos
   const valorFinal = isMimo ? 0 : total
   const valorRecebido = isMimo ? 0 : total
 
-  // Total de ímãs do pedido
+  // Quantidades
   const qtdImasTotal = itens.reduce((s, i) => {
     const qtdItem = i.qtd_imas > 0 ? i.qtd_imas : (parseInt(qtdImasManual[i.produto_id] || '0') || 0)
     return s + qtdItem * i.quantidade
   }, 0)
+  const qtdChaveiroTotal = qtdChaveiroSem + qtdChaveiroComEsp
+  const qtdTotalPedido   = qtdImasTotal + qtdChaveiroTotal
+  const tipoPedido = qtdImasTotal > 0 && qtdChaveiroTotal > 0 ? 'misto'
+    : qtdChaveiroTotal > 0 ? 'chaveiro' : 'ima'
 
+  // Custos de material
+  const r2 = (v: number) => Math.round(v * 100) / 100
+  const n  = Math.max(1, qtdEmbrulhos)
+  const custo_imas_mat    = r2(qtdImasTotal * configMateriais.ima_custo)
+  const custoPorChaveiro  = custoPorPlaca + (configMateriais.argola_custo || 0)
+  const custoPorChavCom   = custoPorChaveiro + (configMateriais.espelho_custo || 0)
+  const custo_chaveiro_mat= r2(qtdChaveiroSem * custoPorChaveiro + qtdChaveiroComEsp * custoPorChavCom)
+
+  // Embalagem compartilhada (baseada no total de peças)
+  const custo_saquinhos  = qtdTotalPedido > 0 ? r2(Math.ceil(qtdTotalPedido / 4) * configMateriais.saquinho_custo) : 0
+  const custo_caixa      = qtdTotalPedido > 0 ? r2(n * configMateriais.caixa_custo) : 0
+  const custo_envelope   = qtdTotalPedido > 0 && !!transportadora ? r2(configMateriais.envelope_custo) : 0
+  const custo_papel_seda = qtdTotalPedido > 0 ? r2(n * configMateriais.papel_seda_custo) : 0
+  const custo_cartao     = qtdTotalPedido > 0 ? r2(n * configMateriais.cartao_custo) : 0
+  const custo_adesivo    = qtdTotalPedido > 0 ? r2(n * (configMateriais.adesivo_caixa_custo || 0)) : 0
+  const custo_lacre      = qtdTotalPedido > 0 ? r2(n * (configMateriais.lacre_caixa_custo || 0)) : 0
+  const custo_total_pedido = r2(custo_imas_mat + custo_chaveiro_mat + custo_saquinhos + custo_caixa + custo_envelope + custo_papel_seda + custo_cartao + custo_adesivo + custo_lacre)
+  const lucroReal = isMimo ? -custo_total_pedido : valorRecebido - custo_total_pedido
+
+  // Mantém custos compatíveis com exibição de ímãs (backward compat)
   const custos = calcularCustosPedido(qtdImasTotal, configMateriais, qtdEmbrulhos, !!transportadora)
-  const lucroReal = isMimo ? -custos.custo_total_pedido : valorRecebido - custos.custo_total_pedido
 
   useEffect(() => {
     async function carregar() {
@@ -70,24 +94,33 @@ export default function NovoPedidoPage() {
       const { data: { user } } = await supabase.auth.getUser()
       const { data: usuario } = await supabase
         .from('usuarios').select('empresa_id').eq('id', user!.id).single()
+      const eid = usuario!.empresa_id
 
-      const [{ data: c }, { data: p }, { data: cfg }] = await Promise.all([
-        supabase.from('clientes').select('id, nome, whatsapp, tipo').eq('empresa_id', usuario!.empresa_id).order('nome'),
-        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, qtd_imas, estoque').eq('empresa_id', usuario!.empresa_id).eq('ativo', true).order('nome'),
-        supabase.from('configuracoes_materiais').select('*').eq('empresa_id', usuario!.empresa_id).single(),
+      const [{ data: c }, { data: p }, { data: cfg }, { data: placasIns }] = await Promise.all([
+        supabase.from('clientes').select('id, nome, whatsapp, tipo').eq('empresa_id', eid).order('nome'),
+        supabase.from('produtos').select('id, nome, preco_venda, preco_liquido, qtd_imas, estoque').eq('empresa_id', eid).eq('ativo', true).order('nome'),
+        supabase.from('configuracoes_materiais').select('*').eq('empresa_id', eid).single(),
+        supabase.from('insumos').select('custo_unitario').eq('empresa_id', eid).in('tipo', ['placa_plastico', 'placa_metal', 'plastico_protecao']),
       ])
+
       setClientes(c || [])
       setProdutos(p || [])
+
+      const somaPlacas = (placasIns || []).reduce((s: number, p: any) => s + Number(p.custo_unitario || 0), 0)
+      setCustoPorPlaca(somaPlacas)
+
       if (cfg) {
         setConfigMateriais({
-          ima_custo: Number(cfg.ima_custo),
-          caixa_custo: Number(cfg.caixa_custo),
-          saquinho_custo: Number(cfg.saquinho_custo),
-          envelope_custo: Number(cfg.envelope_custo),
-          papel_seda_custo: Number(cfg.papel_seda_custo),
-          cartao_custo: Number(cfg.cartao_custo),
-          adesivo_caixa_custo: Number(cfg.adesivo_caixa_custo || 0.32),
-          lacre_caixa_custo: Number(cfg.lacre_caixa_custo || 0.27),
+          ima_custo:          Number(cfg.ima_custo),
+          argola_custo:       Number(cfg.argola_custo || 0.38),
+          espelho_custo:      Number(cfg.espelho_custo || 0.66),
+          caixa_custo:        Number(cfg.caixa_custo),
+          saquinho_custo:     Number(cfg.saquinho_custo),
+          envelope_custo:     Number(cfg.envelope_custo),
+          papel_seda_custo:   Number(cfg.papel_seda_custo),
+          cartao_custo:       Number(cfg.cartao_custo),
+          adesivo_caixa_custo:Number(cfg.adesivo_caixa_custo || 0.32),
+          lacre_caixa_custo:  Number(cfg.lacre_caixa_custo || 0.27),
         })
       }
     }
@@ -142,7 +175,7 @@ export default function NovoPedidoPage() {
 
   async function salvar() {
     if (!clienteSelecionado) return alert('Selecione um cliente')
-    if (itens.length === 0) return alert('Adicione pelo menos um produto')
+    if (itens.length === 0 && qtdTotalPedido === 0) return alert('Adicione pelo menos um produto ou informe a quantidade de chaveiros')
     setLoading(true)
 
     const supabase = createClient()
@@ -156,6 +189,7 @@ export default function NovoPedidoPage() {
       status,
       origem,
       tipo: isMimo ? 'mimo' : 'venda',
+      tipo_pedido: tipoPedido,
       data_entrega: dataEntrega || null,
       observacoes: observacoes || null,
       subtotal: isMimo ? 0 : subtotal,
@@ -167,16 +201,19 @@ export default function NovoPedidoPage() {
       forma_pagamento: isMimo ? null : formaPagamento,
       valor_recebido: valorRecebido,
       qtd_embrulhos: qtdEmbrulhos,
-      // Custos
-      qtd_imas: custos.qtd_imas,
-      custo_imas: custos.custo_imas,
-      custo_saquinhos: custos.custo_saquinhos,
-      custo_caixa: custos.custo_caixa,
-      custo_envelope: custos.custo_envelope,
-      custo_papel_seda: custos.custo_papel_seda,
-      custo_cartao: custos.custo_cartao,
-      custo_total_pedido: custos.custo_total_pedido,
+      // Ímãs
+      qtd_imas: qtdImasTotal,
+      custo_imas: custo_imas_mat,
+      custo_saquinhos,
+      custo_caixa,
+      custo_envelope,
+      custo_papel_seda,
+      custo_cartao,
+      custo_total_pedido,
       lucro_real: lucroReal,
+      // Chaveiros
+      qtd_chaveiro_sem_espelho: qtdChaveiroSem,
+      qtd_chaveiro_com_espelho: qtdChaveiroComEsp,
     }).select().single()
 
     if (error || !pedido) {
@@ -185,16 +222,17 @@ export default function NovoPedidoPage() {
       return
     }
 
-    const itensData = itens.map(i => ({
-      pedido_id: pedido.id,
-      produto_id: i.produto_id,
-      nome_produto: i.nome,
-      quantidade: i.quantidade,
-      preco_unitario: i.preco_unitario,
-      subtotal: i.preco_unitario * i.quantidade,
-    }))
-
-    await supabase.from('itens_pedido').insert(itensData)
+    if (itens.length > 0) {
+      const itensData = itens.map(i => ({
+        pedido_id: pedido.id,
+        produto_id: i.produto_id,
+        nome_produto: i.nome,
+        quantidade: i.quantidade,
+        preco_unitario: i.preco_unitario,
+        subtotal: i.preco_unitario * i.quantidade,
+      }))
+      await supabase.from('itens_pedido').insert(itensData)
+    }
 
     // Cria pasta no Google Drive automaticamente
     try {
@@ -217,14 +255,16 @@ export default function NovoPedidoPage() {
       // Drive não configurado ou erro — continua sem o link
     }
 
-    // Baixa automática de estoque (apenas se não for orçamento e tiver ímãs)
-    if (status !== 'orcamento' && custos.qtd_imas > 0) {
+    // Baixa automática de estoque
+    if (status !== 'orcamento' && qtdTotalPedido > 0) {
       await descontarEstoque(
         supabase,
         usuario!.empresa_id,
-        custos.qtd_imas,
+        qtdImasTotal,
         12,
-        pedido.id
+        pedido.id,
+        qtdChaveiroSem,
+        qtdChaveiroComEsp,
       )
     }
 
@@ -239,7 +279,6 @@ export default function NovoPedidoPage() {
   )
 
   const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-
   const temImasManual = itens.some(i => i.qtd_imas === 0)
 
   return (
@@ -270,7 +309,7 @@ export default function NovoPedidoPage() {
           </div>
         </div>
         <div className={`w-12 h-6 rounded-full transition-all ${isMimo ? 'bg-pink-500' : 'bg-gray-200'}`}>
-          <div className={`w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all ${isMimo ? 'ml-6.5' : 'ml-0.5'}`} style={{ marginLeft: isMimo ? '26px' : '2px' }} />
+          <div className={`w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all`} style={{ marginLeft: isMimo ? '26px' : '2px' }} />
         </div>
       </button>
 
@@ -278,20 +317,12 @@ export default function NovoPedidoPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Origem do pedido</label>
         <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setOrigem('whatsapp_local')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              origem === 'whatsapp_local' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'
-            }`}
-          >
+          <button onClick={() => setOrigem('whatsapp_local')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${origem === 'whatsapp_local' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'}`}>
             WhatsApp · Local
           </button>
-          <button
-            onClick={() => setOrigem('whatsapp_correio')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              origem === 'whatsapp_correio' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-500'
-            }`}
-          >
+          <button onClick={() => setOrigem('whatsapp_correio')}
+            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${origem === 'whatsapp_correio' ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 bg-white text-gray-500'}`}>
             WhatsApp · Correio
           </button>
         </div>
@@ -306,13 +337,8 @@ export default function NovoPedidoPage() {
             { value: 'orcamento', label: 'Orçamento', cls: 'bg-orange-500' },
             { value: 'producao', label: '🟣 Em Produção', cls: 'bg-purple-500' },
           ].map(s => (
-            <button
-              key={s.value}
-              onClick={() => setStatus(s.value)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                status === s.value ? `${s.cls} text-white` : 'bg-gray-100 text-gray-600'
-              }`}
-            >
+            <button key={s.value} onClick={() => setStatus(s.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${status === s.value ? `${s.cls} text-white` : 'bg-gray-100 text-gray-600'}`}>
               {s.label}
             </button>
           ))}
@@ -324,34 +350,16 @@ export default function NovoPedidoPage() {
         )}
       </div>
 
-      {/* Forma de Pagamento — oculto para mimo */}
+      {/* Forma de Pagamento */}
       {!isMimo && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">Forma de Pagamento *</label>
         <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => setFormaPagamento('pix')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'pix' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-500'
-            }`}
-          >
-            Pix
-          </button>
-          <button
-            onClick={() => setFormaPagamento('link')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'link' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 bg-white text-gray-500'
-            }`}
-          >
-            Link
-          </button>
-          <button
-            onClick={() => setFormaPagamento('cartao')}
-            className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
-              formaPagamento === 'cartao' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'
-            }`}
-          >
-            Cartao
-          </button>
+          {[['pix','Pix','green'],['link','Link','purple'],['cartao','Cartao','blue']].map(([v,l,c]) => (
+            <button key={v} onClick={() => setFormaPagamento(v as any)}
+              className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${formaPagamento === v ? `border-${c}-500 bg-${c}-50 text-${c}-700` : 'border-gray-200 bg-white text-gray-500'}`}>
+              {l}
+            </button>
+          ))}
         </div>
       </div>}
 
@@ -362,37 +370,27 @@ export default function NovoPedidoPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
-                <span className="text-green-700 font-bold text-xs">
-                  {clienteSelecionado.nome.slice(0, 2).toUpperCase()}
-                </span>
+                <span className="text-green-700 font-bold text-xs">{clienteSelecionado.nome.slice(0,2).toUpperCase()}</span>
               </div>
               <span className="font-medium text-gray-900">{clienteSelecionado.nome}</span>
             </div>
-            <button onClick={() => setClienteSelecionado(null)} className="text-sm text-gray-400 underline">
-              Trocar
-            </button>
+            <button onClick={() => setClienteSelecionado(null)} className="text-sm text-gray-400 underline">Trocar</button>
           </div>
         ) : (
           <div>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={buscaCliente}
+              <input type="text" value={buscaCliente}
                 onChange={e => { setBuscaCliente(e.target.value); setMostrarClientes(true) }}
                 onFocus={() => setMostrarClientes(true)}
                 placeholder="Buscar cliente..."
-                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             {mostrarClientes && clientesFiltrados.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
                 {clientesFiltrados.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => selecionarCliente(c)}
-                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                  >
+                  <button key={c.id} onClick={() => selecionarCliente(c)}
+                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0">
                     {c.nome}
                   </button>
                 ))}
@@ -407,71 +405,45 @@ export default function NovoPedidoPage() {
         )}
       </div>
 
-      {/* Card Parceria — aparece só quando cliente é parceria */}
+      {/* Card Parceria */}
       {clienteSelecionado?.tipo === 'parceria' && (
         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-base">🤝</span>
-            </div>
+            <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center"><span className="text-base">🤝</span></div>
             <p className="text-sm font-bold text-blue-800">Beneficio da Parceria</p>
             <p className="text-xs text-gray-400 ml-1">escolha um</p>
           </div>
-
           <div className="space-y-2">
-            {/* Opção 1: Embrulhos separados */}
-            <button
-              onClick={() => { setParceliaDesconto(false); setQtdEmbrulhos(q => q === 1 ? 2 : q) }}
-              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
-                !parceliaDesconto ? 'border-blue-400 bg-white' : 'border-transparent bg-white/60'
-              }`}
-            >
+            <button onClick={() => { setParceliaDesconto(false); setQtdEmbrulhos(q => q === 1 ? 2 : q) }}
+              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${!parceliaDesconto ? 'border-blue-400 bg-white' : 'border-transparent bg-white/60'}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">Embrulhos separados</p>
                   <p className="text-xs text-gray-400">Cada pacote: caixinha + cartao + papel</p>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  !parceliaDesconto ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                }`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!parceliaDesconto ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
                   {!parceliaDesconto && <div className="w-2 h-2 rounded-full bg-white" />}
                 </div>
               </div>
               {!parceliaDesconto && (
                 <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
                   <span className="text-xs text-gray-500 flex-1">Quantos embrulhos?</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => Math.max(1, q - 1)) }}
-                    className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600"
-                  >−</button>
+                  <button onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => Math.max(1, q - 1)) }}
+                    className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600">−</button>
                   <span className="w-6 text-center font-bold text-gray-900">{qtdEmbrulhos}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => q + 1) }}
-                    className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-700"
-                  >+</button>
+                  <button onClick={e => { e.stopPropagation(); setQtdEmbrulhos(q => q + 1) }}
+                    className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center font-bold text-blue-700">+</button>
                 </div>
               )}
             </button>
-
-            {/* Opção 2: Desconto 10% */}
-            <button
-              onClick={() => { setParceliaDesconto(true); setQtdEmbrulhos(1) }}
-              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
-                parceliaDesconto ? 'border-green-400 bg-white' : 'border-transparent bg-white/60'
-              }`}
-            >
+            <button onClick={() => { setParceliaDesconto(true); setQtdEmbrulhos(1) }}
+              className={`w-full text-left p-3 rounded-xl border-2 transition-all ${parceliaDesconto ? 'border-green-400 bg-white' : 'border-transparent bg-white/60'}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">Desconto 10%</p>
-                  <p className="text-xs text-gray-400">
-                    {parceliaDesconto && subtotal > 0
-                      ? `- R$ ${descontoParc.toFixed(2).replace('.', ',')} no total`
-                      : 'Desconto aplicado no valor da venda'}
-                  </p>
+                  <p className="text-xs text-gray-400">{parceliaDesconto && subtotal > 0 ? `- R$ ${descontoParc.toFixed(2).replace('.',',')} no total` : 'Desconto aplicado no valor da venda'}</p>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  parceliaDesconto ? 'border-green-500 bg-green-500' : 'border-gray-300'
-                }`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${parceliaDesconto ? 'border-green-500 bg-green-500' : 'border-gray-300'}`}>
                   {parceliaDesconto && <div className="w-2 h-2 rounded-full bg-white" />}
                 </div>
               </div>
@@ -480,39 +452,27 @@ export default function NovoPedidoPage() {
         </div>
       )}
 
-      {/* Produtos */}
+      {/* Produtos (ímãs) */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-gray-700">Produtos *</p>
-          <button
-            onClick={() => setMostrarProdutos(!mostrarProdutos)}
-            className="flex items-center gap-1 text-green-600 text-sm font-medium"
-          >
+          <p className="text-sm font-medium text-gray-700">🧲 Ímãs — Produtos</p>
+          <button onClick={() => setMostrarProdutos(!mostrarProdutos)} className="flex items-center gap-1 text-green-600 text-sm font-medium">
             <Plus size={16} /> Adicionar
           </button>
         </div>
-
         {mostrarProdutos && (
           <div className="mb-3">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-3.5 text-gray-400" />
-              <input
-                type="text"
-                value={buscaProduto}
-                onChange={e => setBuscaProduto(e.target.value)}
-                placeholder="Buscar produto..."
-                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                autoFocus
-              />
+              <input type="text" value={buscaProduto} onChange={e => setBuscaProduto(e.target.value)}
+                placeholder="Buscar produto..." autoFocus
+                className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             {produtosFiltrados.length > 0 && (
               <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
                 {produtosFiltrados.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => adicionarProduto(p)}
-                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 flex justify-between"
-                  >
+                  <button key={p.id} onClick={() => adicionarProduto(p)}
+                    className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-0 flex justify-between">
                     <span>{p.nome}</span>
                     <span className="text-green-600 font-medium">{fmt(p.preco_venda)}</span>
                   </button>
@@ -521,7 +481,6 @@ export default function NovoPedidoPage() {
             )}
           </div>
         )}
-
         {itens.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-4">Nenhum produto adicionado</p>
         ) : (
@@ -530,50 +489,30 @@ export default function NovoPedidoPage() {
               <div key={item.produto_id} className="border border-gray-100 rounded-xl p-3">
                 <div className="flex items-start justify-between mb-2">
                   <p className="text-sm font-medium text-gray-900">{item.nome}</p>
-                  <button onClick={() => removerItem(item.produto_id)}>
-                    <Trash2 size={15} className="text-red-400" />
-                  </button>
+                  <button onClick={() => removerItem(item.produto_id)}><Trash2 size={15} className="text-red-400" /></button>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => alterarQtd(item.produto_id, item.quantidade - 1)}
-                      className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold"
-                    >
-                      −
-                    </button>
+                    <button onClick={() => alterarQtd(item.produto_id, item.quantidade - 1)}
+                      className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold">−</button>
                     <span className="w-8 text-center font-semibold text-sm">{item.quantidade}</span>
-                    <button
-                      onClick={() => alterarQtd(item.produto_id, item.quantidade + 1)}
-                      className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold"
-                    >
-                      +
-                    </button>
+                    <button onClick={() => alterarQtd(item.produto_id, item.quantidade + 1)}
+                      className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold">+</button>
                   </div>
                   <span className="text-xs text-gray-400">×</span>
-                  <input
-                    type="number"
-                    value={item.preco_unitario}
+                  <input type="number" value={item.preco_unitario}
                     onChange={e => alterarPreco(item.produto_id, parseFloat(e.target.value) || 0)}
                     step="0.01"
-                    className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500"
-                  />
-                  <span className="text-sm font-semibold text-gray-900 ml-auto">
-                    {fmt(item.preco_unitario * item.quantidade)}
-                  </span>
+                    className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500" />
+                  <span className="text-sm font-semibold text-gray-900 ml-auto">{fmt(item.preco_unitario * item.quantidade)}</span>
                 </div>
-                {/* Campo manual de qtd_imas para encomendas personalizadas */}
                 {item.qtd_imas === 0 && (
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs text-orange-600">📸 Qtd ímãs (personalizado):</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={qtdImasManual[item.produto_id] || ''}
+                    <input type="number" min="0" value={qtdImasManual[item.produto_id] || ''}
                       onChange={e => setQtdImasManual(prev => ({ ...prev, [item.produto_id]: e.target.value }))}
                       placeholder="0"
-                      className="w-16 border border-orange-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-orange-400"
-                    />
+                      className="w-16 border border-orange-200 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-1 focus:ring-orange-400" />
                   </div>
                 )}
               </div>
@@ -582,83 +521,108 @@ export default function NovoPedidoPage() {
         )}
       </div>
 
+      {/* Chaveiro */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <p className="text-sm font-medium text-gray-700 mb-3">🔑 Chaveiro</p>
+        <div className="space-y-3">
+          {/* Sem espelho */}
+          <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Sem espelho</p>
+              <p className="text-xs text-gray-400">{fmt(custoPorChaveiro)}/un de custo</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setQtdChaveiroSem(q => Math.max(0, q - 1))}
+                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600">−</button>
+              <span className="w-8 text-center font-bold text-gray-900">{qtdChaveiroSem}</span>
+              <button onClick={() => setQtdChaveiroSem(q => q + 1)}
+                className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center font-bold text-amber-700">+</button>
+            </div>
+          </div>
+          {/* Com espelho */}
+          <div className="flex items-center justify-between border border-gray-100 rounded-xl p-3">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Com espelho</p>
+              <p className="text-xs text-gray-400">{fmt(custoPorChavCom)}/un de custo</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setQtdChaveiroComEsp(q => Math.max(0, q - 1))}
+                className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-gray-600">−</button>
+              <span className="w-8 text-center font-bold text-gray-900">{qtdChaveiroComEsp}</span>
+              <button onClick={() => setQtdChaveiroComEsp(q => q + 1)}
+                className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center font-bold text-amber-700">+</button>
+            </div>
+          </div>
+        </div>
+        {qtdChaveiroTotal > 0 && (
+          <div className="mt-3 bg-amber-50 rounded-xl px-3 py-2 flex justify-between">
+            <p className="text-xs font-semibold text-amber-700">{qtdChaveiroTotal} chaveiro{qtdChaveiroTotal > 1 ? 's' : ''}</p>
+            <p className="text-xs font-bold text-amber-800">{fmt(custo_chaveiro_mat)} de material</p>
+          </div>
+        )}
+      </div>
+
+      {/* Tipo do pedido */}
+      {qtdTotalPedido > 0 && (
+        <div className={`rounded-xl px-4 py-2 mb-4 text-xs font-semibold text-center ${
+          tipoPedido === 'misto' ? 'bg-purple-100 text-purple-700' :
+          tipoPedido === 'chaveiro' ? 'bg-amber-100 text-amber-700' :
+          'bg-blue-100 text-blue-700'
+        }`}>
+          {tipoPedido === 'misto' ? '🔀 Pedido Misto — ímãs + chaveiros' :
+           tipoPedido === 'chaveiro' ? '🔑 Pedido de Chaveiro' :
+           '🧲 Pedido de Ímãs'}
+        </div>
+      )}
+
       {/* Data e observações */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4 space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Data de entrega</label>
-          <input
-            type="date"
-            value={dataEntrega}
-            onChange={e => setDataEntrega(e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
+          <input type="date" value={dataEntrega} onChange={e => setDataEntrega(e.target.value)}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Desconto (R$)</label>
-          <input
-            type="number"
-            value={desconto}
-            onChange={e => setDesconto(e.target.value)}
-            placeholder="0,00"
-            step="0.01"
-            min="0"
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-          />
+          <input type="number" value={desconto} onChange={e => setDesconto(e.target.value)}
+            placeholder="0,00" step="0.01" min="0"
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         </div>
-
         <div className="border-t border-gray-100 pt-4">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Frete</p>
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Transportadora</label>
-              <input
-                type="text"
-                value={transportadora}
-                onChange={e => setTransportadora(e.target.value)}
+              <input type="text" value={transportadora} onChange={e => setTransportadora(e.target.value)}
                 placeholder="Ex: Correios, Jadlog, Shopee..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Valor (R$)</label>
-                <input
-                  type="number"
-                  value={freteValor}
-                  onChange={e => setFreteValor(e.target.value)}
-                  placeholder="0,00"
-                  step="0.01" min="0"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <input type="number" value={freteValor} onChange={e => setFreteValor(e.target.value)}
+                  placeholder="0,00" step="0.01" min="0"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Prazo</label>
-                <input
-                  type="text"
-                  value={prazoEntrega}
-                  onChange={e => setPrazoEntrega(e.target.value)}
+                <input type="text" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)}
                   placeholder="Ex: 3-5 dias"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
               </div>
             </div>
           </div>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Observações</label>
-          <textarea
-            value={observacoes}
-            onChange={e => setObservacoes(e.target.value)}
-            placeholder="Instruções especiais, detalhes do pedido..."
-            rows={3}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-          />
+          <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)}
+            placeholder="Instruções especiais, detalhes do pedido..." rows={3}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" />
         </div>
       </div>
 
       {/* Total + Custos + Lucro */}
-      {itens.length > 0 && (
+      {(itens.length > 0 || qtdChaveiroTotal > 0) && (
         <>
           {isMimo && (
             <div className="bg-pink-500 rounded-2xl p-4 mb-3 text-white">
@@ -669,52 +633,61 @@ export default function NovoPedidoPage() {
               <p className="text-sm text-pink-100">Esse pedido nao vai entrar no caixa. Os insumos serao descontados do estoque.</p>
             </div>
           )}
-          {!isMimo && <div className="bg-green-600 rounded-2xl p-4 mb-3 text-white">
-            <div className="flex justify-between text-sm text-green-200 mb-1">
-              <span>Subtotal</span>
-              <span>{fmt(subtotal)}</span>
-            </div>
-            {descontoValor > 0 && (
+          {!isMimo && (
+            <div className="bg-green-600 rounded-2xl p-4 mb-3 text-white">
               <div className="flex justify-between text-sm text-green-200 mb-1">
-                <span>Desconto</span>
-                <span>- {fmt(descontoValor)}</span>
+                <span>Subtotal</span><span>{fmt(subtotal)}</span>
               </div>
-            )}
-            {freteVal > 0 && (
-              <div className="flex justify-between text-sm text-green-200 mb-1">
-                <span>Frete</span>
-                <span>+ {fmt(freteVal)}</span>
+              {descontoValor > 0 && (
+                <div className="flex justify-between text-sm text-green-200 mb-1">
+                  <span>Desconto</span><span>- {fmt(descontoValor)}</span>
+                </div>
+              )}
+              {freteVal > 0 && (
+                <div className="flex justify-between text-sm text-green-200 mb-1">
+                  <span>Frete</span><span>+ {fmt(freteVal)}</span>
+                </div>
+              )}
+              <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
+                <span className="font-medium">Valor da Venda</span>
+                <span className="text-2xl font-bold">{fmt(total)}</span>
               </div>
-            )}
-            <div className="border-t border-green-500 mt-2 pt-2 flex justify-between items-center mb-2">
-              <span className="font-medium">Valor da Venda</span>
-              <span className="text-2xl font-bold">{fmt(total)}</span>
+              <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
+                formaPagamento === 'pix' ? 'bg-green-600' : formaPagamento === 'cartao' ? 'bg-blue-600' : 'bg-purple-600'
+              }`}>
+                <span className="text-sm font-medium text-white">
+                  {formaPagamento === 'pix' ? 'Pix' : formaPagamento === 'cartao' ? 'Cartao' : 'Link'}
+                </span>
+                <span className="text-lg font-bold text-white">{fmt(valorRecebido)}</span>
+              </div>
             </div>
-            <div className={`rounded-xl px-3 py-2 flex justify-between items-center ${
-              formaPagamento === 'pix' ? 'bg-green-600' : formaPagamento === 'cartao' ? 'bg-blue-600' : 'bg-purple-600'
-            }`}>
-              <span className="text-sm font-medium text-white">
-                {formaPagamento === 'pix' ? 'Pix' : formaPagamento === 'cartao' ? 'Cartao' : 'Link'}
-              </span>
-              <span className="text-lg font-bold text-white">{fmt(valorRecebido)}</span>
-            </div>
-          </div>}
-
+          )}
 
           {/* Custos de Material */}
-          {qtdImasTotal > 0 && (
+          {qtdTotalPedido > 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-3">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                📦 Custo de Material ({qtdImasTotal} ímãs)
+                📦 Custo de Material ({qtdTotalPedido} peça{qtdTotalPedido > 1 ? 's' : ''})
               </p>
               <div className="space-y-1.5">
+                {qtdImasTotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Ímãs ({qtdImasTotal}×)</span>
+                    <span className="text-gray-700">{fmt(custo_imas_mat)}</span>
+                  </div>
+                )}
+                {qtdChaveiroTotal > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Chaveiros ({qtdChaveiroTotal}×)</span>
+                    <span className="text-gray-700">{fmt(custo_chaveiro_mat)}</span>
+                  </div>
+                )}
                 {[
-                  { label: 'Ímãs', val: custos.custo_imas },
-                  { label: 'Saquinhos', val: custos.custo_saquinhos },
-                  { label: 'Caixa', val: custos.custo_caixa },
-                  { label: 'Envelope', val: custos.custo_envelope },
-                  { label: 'Papel Seda', val: custos.custo_papel_seda },
-                  { label: 'Cartão Reviva', val: custos.custo_cartao },
+                  { label: 'Saquinhos', val: custo_saquinhos },
+                  { label: 'Caixa', val: custo_caixa },
+                  { label: 'Envelope', val: custo_envelope },
+                  { label: 'Papel Seda', val: custo_papel_seda },
+                  { label: 'Cartão Reviva', val: custo_cartao },
                 ].map(({ label, val }) => val > 0 && (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-gray-500">{label}</span>
@@ -723,23 +696,17 @@ export default function NovoPedidoPage() {
                 ))}
                 <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold text-sm">
                   <span className="text-gray-700">Total Materiais</span>
-                  <span className="text-orange-600">{fmt(custos.custo_total_pedido)}</span>
+                  <span className="text-orange-600">{fmt(custo_total_pedido)}</span>
                 </div>
               </div>
-              <div className={`mt-3 rounded-xl px-3 py-2.5 flex justify-between items-center ${
-                lucroReal >= 0 ? 'bg-green-50' : 'bg-red-50'
-              }`}>
-                <span className={`text-sm font-semibold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                  💖 Lucro Real
-                </span>
-                <span className={`text-lg font-bold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                  {fmt(lucroReal)}
-                </span>
+              <div className={`mt-3 rounded-xl px-3 py-2.5 flex justify-between items-center ${lucroReal >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                <span className={`text-sm font-semibold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>💖 Lucro Real</span>
+                <span className={`text-lg font-bold ${lucroReal >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmt(lucroReal)}</span>
               </div>
             </div>
           )}
 
-          {temImasManual && qtdImasTotal === 0 && (
+          {temImasManual && qtdImasTotal === 0 && qtdChaveiroTotal === 0 && (
             <div className="bg-orange-50 rounded-xl p-3 mb-3 border border-orange-200">
               <p className="text-xs text-orange-700">
                 ⚠️ Informe a quantidade de ímãs nos produtos personalizados para calcular o custo.
@@ -750,11 +717,8 @@ export default function NovoPedidoPage() {
       )}
 
       <div className="pb-24">
-        <button
-          onClick={salvar}
-          disabled={loading}
-          className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-base disabled:opacity-50 active:scale-95 transition-all"
-        >
+        <button onClick={salvar} disabled={loading}
+          className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-base disabled:opacity-50 active:scale-95 transition-all">
           {loading ? 'Salvando...' : 'Criar Pedido'}
         </button>
       </div>
