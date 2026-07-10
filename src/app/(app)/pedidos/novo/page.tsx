@@ -38,7 +38,9 @@ export default function NovoPedidoPage() {
   const [prazoEntrega, setPrazoEntrega] = useState('')
   const [formaPagamento, setFormaPagamento] = useState<'pix' | 'link' | 'cartao'>('pix')
   const [origem, setOrigem] = useState<'whatsapp_local' | 'whatsapp_correio'>('whatsapp_local')
-  const [isMimo, setIsMimo] = useState(false)
+  const [tipoPedidoTipo, setTipoPedidoTipo] = useState<'venda' | 'mimo' | 'parceria'>('venda')
+  const isMimo = tipoPedidoTipo === 'mimo'
+  const isParceria = tipoPedidoTipo === 'parceria'
   const [qtdEmbrulhos, setQtdEmbrulhos] = useState(1)
   const [parceliaDesconto, setParceliaDesconto] = useState(false)
   const [qtdImasManual, setQtdImasManual] = useState<Record<string, string>>({})
@@ -150,15 +152,6 @@ export default function NovoPedidoPage() {
     setClienteSelecionado(c)
     setMostrarClientes(false)
     setBuscaCliente('')
-    if (c.tipo === 'mimo') {
-      setIsMimo(true)
-    } else {
-      setIsMimo(false)
-    }
-    if (c.tipo !== 'parceria') {
-      setQtdEmbrulhos(1)
-      setParceliaDesconto(false)
-    }
   }
 
   function adicionarProduto(p: any) {
@@ -216,7 +209,7 @@ export default function NovoPedidoPage() {
       cliente_id: clienteSelecionado.id,
       status,
       origem,
-      tipo: isMimo ? 'mimo' : 'venda',
+      tipo: tipoPedidoTipo,
       tipo_pedido: tipoPedido,
       data_entrega: dataEntrega || null,
       observacoes: observacoes || null,
@@ -318,28 +311,26 @@ export default function NovoPedidoPage() {
         <h1 className="text-xl font-bold text-gray-900">Novo Pedido</h1>
       </div>
 
-      {/* Toggle Mimo */}
-      <button
-        onClick={() => setIsMimo(!isMimo)}
-        className={`w-full flex items-center justify-between rounded-2xl border p-4 mb-4 transition-all ${
-          isMimo ? 'bg-pink-50 border-pink-300' : 'bg-white border-gray-100 shadow-sm'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isMimo ? 'bg-pink-100' : 'bg-gray-100'}`}>
-            <Gift size={18} className={isMimo ? 'text-pink-500' : 'text-gray-400'} />
-          </div>
-          <div className="text-left">
-            <p className={`text-sm font-semibold ${isMimo ? 'text-pink-700' : 'text-gray-700'}`}>
-              {isMimo ? 'Mimo ativado' : 'É um mimo / brinde?'}
-            </p>
-            <p className="text-xs text-gray-400">Desconta insumos, não entra no caixa</p>
-          </div>
+      {/* Tipo do Pedido */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Tipo do pedido</p>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => { setTipoPedidoTipo('venda'); setParceliaDesconto(false); setQtdEmbrulhos(1) }}
+            className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${tipoPedidoTipo === 'venda' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-400'}`}>
+            💰 Venda
+          </button>
+          <button onClick={() => { setTipoPedidoTipo('mimo'); setParceliaDesconto(false); setQtdEmbrulhos(1) }}
+            className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${tipoPedidoTipo === 'mimo' ? 'border-pink-400 bg-pink-50 text-pink-700' : 'border-gray-200 bg-white text-gray-400'}`}>
+            🎁 Mimo
+          </button>
+          <button onClick={() => setTipoPedidoTipo('parceria')}
+            className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${tipoPedidoTipo === 'parceria' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-400'}`}>
+            🤝 Parceria
+          </button>
         </div>
-        <div className={`w-12 h-6 rounded-full transition-all ${isMimo ? 'bg-pink-500' : 'bg-gray-200'}`}>
-          <div className={`w-5 h-5 bg-white rounded-full shadow mt-0.5 transition-all`} style={{ marginLeft: isMimo ? '26px' : '2px' }} />
-        </div>
-      </button>
+        {isMimo && <p className="text-xs text-pink-600 mt-2 text-center">Desconta estoque · não entra no caixa</p>}
+        {isParceria && <p className="text-xs text-blue-600 mt-2 text-center">Escolha o benefício da parceria abaixo</p>}
+      </div>
 
       {/* Origem do pedido */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
@@ -434,7 +425,7 @@ export default function NovoPedidoPage() {
       </div>
 
       {/* Card Parceria */}
-      {clienteSelecionado?.tipo === 'parceria' && (
+      {isParceria && (
         <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center"><span className="text-base">🤝</span></div>
