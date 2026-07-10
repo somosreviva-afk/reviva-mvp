@@ -518,12 +518,16 @@ export default function NovoPedidoPage() {
                     <button onClick={() => alterarQtd(item.produto_id, item.quantidade + 1)}
                       className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 font-bold">+</button>
                   </div>
-                  <span className="text-xs text-gray-400">×</span>
-                  <input type="number" value={item.preco_unitario}
-                    onChange={e => alterarPreco(item.produto_id, parseFloat(e.target.value) || 0)}
-                    step="0.01"
-                    className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500" />
-                  <span className="text-sm font-semibold text-gray-900 ml-auto">{fmt(item.preco_unitario * item.quantidade)}</span>
+                  {!isMimo && (
+                    <>
+                      <span className="text-xs text-gray-400">×</span>
+                      <input type="number" value={item.preco_unitario}
+                        onChange={e => alterarPreco(item.produto_id, parseFloat(e.target.value) || 0)}
+                        step="0.01"
+                        className="w-24 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-green-500" />
+                      <span className="text-sm font-semibold text-gray-900 ml-auto">{fmt(item.preco_unitario * item.quantidade)}</span>
+                    </>
+                  )}
                 </div>
                 {item.qtd_imas === 0 && (
                   <div className="mt-2 flex items-center gap-2">
@@ -556,8 +560,8 @@ export default function NovoPedidoPage() {
             <div>
               <p className="text-sm font-medium text-gray-800">Sem espelho</p>
               <p className="text-xs text-gray-400">
-                {qtdChaveiroTotal > 0 ? <span className="text-green-600 font-semibold">{fmt(precoSemUn)}/un</span> : 'preço por faixa'}
-                {' · '}custo {fmt(custoPorChaveiro)}/un
+                {!isMimo && qtdChaveiroTotal > 0 && <span className="text-green-600 font-semibold">{fmt(precoSemUn)}/un · </span>}
+                custo {fmt(custoPorChaveiro)}/un
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -573,8 +577,8 @@ export default function NovoPedidoPage() {
             <div>
               <p className="text-sm font-medium text-gray-800">Com espelho</p>
               <p className="text-xs text-gray-400">
-                {qtdChaveiroTotal > 0 ? <span className="text-green-600 font-semibold">{fmt(precoComUn)}/un</span> : 'preço por faixa'}
-                {' · '}custo {fmt(custoPorChavCom)}/un
+                {!isMimo && qtdChaveiroTotal > 0 && <span className="text-green-600 font-semibold">{fmt(precoComUn)}/un · </span>}
+                custo {fmt(custoPorChavCom)}/un
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -588,21 +592,21 @@ export default function NovoPedidoPage() {
         </div>
         {qtdChaveiroTotal > 0 && (
           <div className="mt-3 bg-amber-50 rounded-xl px-3 py-2 space-y-1">
-            {qtdChaveiroSem > 0 && (
+            {!isMimo && qtdChaveiroSem > 0 && (
               <div className="flex justify-between text-xs">
                 <span className="text-amber-700">{qtdChaveiroSem}× sem espelho @ {fmt(precoSemUn)}</span>
                 <span className="font-bold text-amber-800">{fmt(qtdChaveiroSem * precoSemUn)}</span>
               </div>
             )}
-            {qtdChaveiroComEsp > 0 && (
+            {!isMimo && qtdChaveiroComEsp > 0 && (
               <div className="flex justify-between text-xs">
                 <span className="text-amber-700">{qtdChaveiroComEsp}× com espelho @ {fmt(precoComUn)}</span>
                 <span className="font-bold text-amber-800">{fmt(qtdChaveiroComEsp * precoComUn)}</span>
               </div>
             )}
-            <div className="flex justify-between text-xs border-t border-amber-200 pt-1 mt-1">
+            <div className="flex justify-between text-xs ${!isMimo ? 'border-t border-amber-200 pt-1 mt-1' : ''}">
               <span className="text-amber-600">custo material</span>
-              <span className="text-amber-600">{fmt(custo_chaveiro_mat)}</span>
+              <span className="font-semibold text-amber-700">{fmt(custo_chaveiro_mat)}</span>
             </div>
           </div>
         )}
