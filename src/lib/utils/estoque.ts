@@ -47,7 +47,6 @@ export function calcularConsumo(qtdImas: number, fotosPerFolha: number = 12): Re
     placa_plastico:   qtdImas,
     placa_metal:      qtdImas,
     plastico_protecao:qtdImas,
-    folha_impressao:  qtdImas / fotosPerFolha,
     saquinho:         Math.ceil(qtdImas / 4),
     caixa:            1,
     adesivo_caixa:    1,
@@ -85,7 +84,6 @@ export function calcularConsumoTotal(
   if (qtdChaveiroComEspelho > 0) consumo.espelho = qtdChaveiroComEspelho
 
   // Embalagem (baseada no total de peças)
-  consumo.folha_impressao = total / fotosPerFolha
   consumo.saquinho        = Math.ceil(total / 4)
   consumo.caixa           = 1
   consumo.adesivo_caixa   = 1
