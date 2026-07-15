@@ -8,6 +8,7 @@ import {
   FolderOpen, Camera, Package, Download, Wrench, PlusCircle,
   DollarSign, TrendingUp, CheckSquare, Square,
 } from 'lucide-react'
+import JSZip from 'jszip'
 import Link from 'next/link'
 import { formatCurrency, formatDate, STATUS_LABELS, STATUS_COLORS, STATUS_ORDER } from '@/lib/utils/formatters'
 import { calcularCustosPedido, CONFIG_PADRAO, type ConfigMateriais } from '@/lib/utils/custos'
@@ -49,6 +50,7 @@ export default function PedidoDetailPage() {
   const [novoCustoDesc, setNovoCustoDesc] = useState('')
   const [novoCustoValor, setNovoCustoValor] = useState('')
   const [salvandoCusto, setSalvandoCusto] = useState(false)
+  const [baixandoZip, setBaixandoZip] = useState(false)
   // visual only
   const [expandirMateriais, setExpandirMateriais] = useState(false)
   // checklist de produção (persiste em localStorage por pedido)
@@ -253,6 +255,33 @@ export default function PedidoDetailPage() {
     const listaItens = itens.map(i => `• ${i.nome_produto} x${i.quantidade} — ${formatCurrency(i.subtotal)}`).join('\n')
     const mensagem = `Ola ${pedido.clientes.nome}!\n\nSeu pedido #${pedido.numero}:\n${listaItens}${dataEntrega}\n\n*Total: ${formatCurrency(pedido.valor_total)}*\n\nStatus: ${STATUS_LABELS[pedido.status]}`
     window.open(`https://wa.me/55${numero}?text=${encodeURIComponent(mensagem)}`, '_blank')
+  }
+
+  async function baixarFotosZip() {
+    if (fotos.length === 0) return
+    setBaixandoZip(true)
+    try {
+      const zip = new JSZip()
+      await Promise.all(
+        fotos.map(async (foto) => {
+          const res = await fetch(foto.url)
+          const blob = await res.blob()
+          zip.file(foto.name, blob)
+        })
+      )
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const nomeCliente = pedido?.clientes?.nome?.replace(/[^a-z0-9]/gi, '_') || 'fotos'
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${nomeCliente}-fotos.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Erro ao gerar ZIP. Tente novamente.')
+    } finally {
+      setBaixandoZip(false)
+    }
   }
 
   async function enviarSolicitacaoFotos() {
@@ -605,28 +634,38 @@ export default function PedidoDetailPage() {
             {fotos.length === 0 ? (
               <p className="text-sm text-gray-400 italic text-center py-2">Nenhuma foto enviada ainda.</p>
             ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {fotos.map((foto) => (
-                  <div key={foto.name} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
-                    <img
-                      src={foto.url}
-                      alt={foto.name}
-                      className="w-full h-full object-cover cursor-pointer active:scale-95 transition-all"
-                      onClick={() => setFotoAmpliada(foto.url)}
-                    />
-                    <a
-                      href={foto.url}
-                      download={foto.name}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute bottom-1 right-1 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
-                      onClick={e => e.stopPropagation()}
-                    >
-                      <Download size={12} className="text-white" />
-                    </a>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {fotos.map((foto) => (
+                    <div key={foto.name} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                      <img
+                        src={foto.url}
+                        alt={foto.name}
+                        className="w-full h-full object-cover cursor-pointer active:scale-95 transition-all"
+                        onClick={() => setFotoAmpliada(foto.url)}
+                      />
+                      <a
+                        href={foto.url}
+                        download={foto.name}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute bottom-1 right-1 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <Download size={12} className="text-white" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={baixarFotosZip}
+                  disabled={baixandoZip}
+                  className="w-full flex items-center justify-center gap-2 bg-purple-50 border border-purple-200 rounded-xl px-3 py-2.5 text-sm font-medium text-purple-800 active:scale-95 transition-all disabled:opacity-60"
+                >
+                  <Download size={15} className="text-purple-600 shrink-0" />
+                  {baixandoZip ? 'Gerando ZIP...' : `Baixar todas as fotos (${fotos.length}) em ZIP`}
+                </button>
+              </>
             )}
           </div>
 
