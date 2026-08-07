@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, AlertTriangle, Package, History, Clock, Trash2, Search, X, ChevronRight, BarChart2 } from 'lucide-react'
+import { Plus, AlertTriangle, Package, History, Clock, Trash2, Search, X, ChevronRight, BarChart2, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { garantirInsumos, TIPOS_IMA, calcularConsumo } from '@/lib/utils/estoque'
@@ -46,6 +46,8 @@ export default function EstoquePage() {
   const [loading, setLoading] = useState(true)
   const [editando, setEditando] = useState<string | null>(null)
   const [editMin, setEditMin] = useState('')
+  const [ajustando, setAjustando] = useState<string | null>(null)
+  const [novaQtd, setNovaQtd] = useState('')
   // kits baseados nos produtos cadastrados
   const [produtosKit, setProdutosKit] = useState<{nome: string, qtdImas: number}[]>([])
   // filtros (só visual)
@@ -111,6 +113,31 @@ export default function EstoquePage() {
   }
 
   useEffect(() => { carregar() }, [])
+
+  // ── ajuste manual de quantidade ────────────────────────────────────
+  async function salvarAjuste(insumo: any) {
+    const nova = parseFloat(novaQtd)
+    if (isNaN(nova) || nova < 0) { alert('Quantidade inválida'); return }
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', user!.id).single()
+    const qtdAtual = Number(insumo.quantidade)
+    const diff = nova - qtdAtual
+    await supabase.from('insumos').update({ quantidade: nova }).eq('id', insumo.id)
+    if (diff !== 0) {
+      await supabase.from('movimentacoes_estoque').insert({
+        empresa_id: usuario!.empresa_id,
+        insumo_id: insumo.id,
+        tipo: diff > 0 ? 'entrada' : 'saida',
+        quantidade: Math.abs(diff),
+        data: new Date().toISOString().split('T')[0],
+        observacoes: 'Ajuste manual de quantidade',
+      })
+    }
+    setAjustando(null)
+    setNovaQtd('')
+    await carregar()
+  }
 
   // ── salvar mínimo (preservado integralmente) ───────────────────────
   async function salvarMinimo(insumoId: string) {
@@ -252,9 +279,49 @@ export default function EstoquePage() {
         )}
 
         {/* rodapé */}
-        <div className="border-t border-gray-50 px-4 py-2 flex items-center justify-end">
+        <div className="border-t border-gray-50 px-4 py-2 flex items-center justify-between">
+          <button
+            onClick={e => {
+              e.stopPropagation()
+              setAjustando(insumo.id)
+              setNovaQtd(insumo.unidade === 'folha' ? qtd.toFixed(1) : qtd.toFixed(0))
+            }}
+            className="text-xs text-blue-600 font-semibold flex items-center gap-1 active:scale-95 transition-all"
+          >
+            <Pencil size={11} /> Ajustar qtd
+          </button>
           <span className="text-xs text-gray-400 flex items-center gap-1">Ver detalhes <ChevronRight size={12} /></span>
         </div>
+
+        {/* painel de ajuste inline */}
+        {ajustando === insumo.id && (
+          <div className="border-t border-blue-100 bg-blue-50 px-4 py-3" onClick={e => e.stopPropagation()}>
+            <p className="text-xs font-semibold text-blue-800 mb-2">
+              Nova quantidade em estoque <span className="text-blue-500 font-normal">(atual: {qtd.toFixed(insumo.unidade === 'folha' ? 1 : 0)} {insumo.unidade})</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={novaQtd}
+                onChange={e => setNovaQtd(e.target.value)}
+                step="0.1"
+                min="0"
+                autoFocus
+                className="flex-1 border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="Nova qtd"
+              />
+              <span className="text-xs text-gray-500 shrink-0">{insumo.unidade}</span>
+              <button
+                onClick={() => salvarAjuste(insumo)}
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold shrink-0 active:scale-95"
+              >✓</button>
+              <button
+                onClick={() => { setAjustando(null); setNovaQtd('') }}
+                className="text-gray-400 px-2 py-2 rounded-lg text-sm shrink-0"
+              >✕</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

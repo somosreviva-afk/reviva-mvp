@@ -442,6 +442,12 @@ export default function PedidoDetailPage() {
             <p className="text-white text-sm font-bold">
               {pedido.tipo === 'mimo' ? 'Mimo' : formatCurrency(pedido.valor_recebido ?? pedido.valor_total)}
             </p>
+            {pedido.tipo !== 'mimo' && pedido.pago === false && (
+              <p className="text-orange-300 text-[10px] font-bold mt-0.5">⏳ Não pago</p>
+            )}
+            {pedido.tipo !== 'mimo' && pedido.pago === true && (
+              <p className="text-green-300 text-[10px] font-bold mt-0.5">✓ Pago</p>
+            )}
           </div>
           {pedido.origem === 'nuvemshop' && (
             <div className="bg-white/10 rounded-xl px-3 py-2.5 flex items-center">
@@ -549,6 +555,29 @@ export default function PedidoDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── PAGAMENTO PENDENTE ── */}
+      {pedido.tipo !== 'mimo' && pedido.pago === false && (
+        <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl">⏳</span>
+            <div>
+              <p className="text-sm font-bold text-orange-800">Pagamento pendente</p>
+              <p className="text-xs text-orange-600">Este pedido ainda não foi pago</p>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              const supabase = createClient()
+              await supabase.from('pedidos').update({ pago: true }).eq('id', id)
+              await carregar()
+            }}
+            className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
+          >
+            ✅ Marcar como pago
+          </button>
+        </div>
+      )}
 
       {/* ── 3. PRODUÇÃO ── */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-4 overflow-hidden">

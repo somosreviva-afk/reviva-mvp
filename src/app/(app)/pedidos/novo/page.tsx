@@ -48,18 +48,19 @@ export default function NovoPedidoPage() {
   const [qtdChaveiroSem, setQtdChaveiroSem] = useState(0)
   const [qtdChaveiroComEsp, setQtdChaveiroComEsp] = useState(0)
   const [custoPorPlaca, setCustoPorPlaca] = useState(0)
+  const [pago, setPago] = useState(true)
 
   // Tabela de preços dos chaveiros (por faixa de quantidade total)
   function precoChaveiroSemUn(qtdTotal: number): number {
-    if (qtdTotal >= 15) return 9.50
-    if (qtdTotal >= 10) return 10.50
-    if (qtdTotal >= 5)  return 11.50
+    if (qtdTotal >= 12) return 10.90
+    if (qtdTotal >= 10) return 11.90
+    if (qtdTotal >= 6)  return 12.90
     return 13.90
   }
   function precoChaveiroComUn(qtdTotal: number): number {
-    if (qtdTotal >= 15) return 10.50
-    if (qtdTotal >= 10) return 11.50
-    if (qtdTotal >= 5)  return 12.50
+    if (qtdTotal >= 12) return 11.90
+    if (qtdTotal >= 10) return 12.90
+    if (qtdTotal >= 6)  return 13.90
     return 14.90
   }
 
@@ -210,6 +211,7 @@ export default function NovoPedidoPage() {
       status,
       origem,
       tipo: tipoPedidoTipo,
+      pago: isMimo ? null : pago,
       tipo_pedido: tipoPedido,
       data_entrega: dataEntrega || null,
       observacoes: observacoes || null,
@@ -764,6 +766,30 @@ export default function NovoPedidoPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Status de Pagamento */}
+      {!isMimo && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Pagamento recebido?</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setPago(true)}
+              className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${pago ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-400'}`}
+            >
+              ✅ Pago
+            </button>
+            <button
+              onClick={() => setPago(false)}
+              className={`py-3 rounded-xl text-sm font-bold border-2 transition-all ${!pago ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-gray-200 bg-white text-gray-400'}`}
+            >
+              ⏳ Não pago
+            </button>
+          </div>
+          {!pago && (
+            <p className="text-xs text-orange-600 mt-2 text-center">Pedido criado como aguardando pagamento</p>
+          )}
+        </div>
       )}
 
       <div className="pb-24">
