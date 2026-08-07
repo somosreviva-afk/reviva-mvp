@@ -569,12 +569,23 @@ export default function PedidoDetailPage() {
           <button
             onClick={async () => {
               const supabase = createClient()
+              const { data: { user } } = await supabase.auth.getUser()
+              const { data: usuario } = await supabase.from('usuarios').select('empresa_id').eq('id', user!.id).single()
               await supabase.from('pedidos').update({ pago: true }).eq('id', id)
+              await supabase.from('financeiro').insert({
+                empresa_id: usuario!.empresa_id,
+                tipo: 'entrada',
+                descricao: `Pedido #${pedido.numero} — ${pedido.clientes?.nome}`,
+                valor: Number(pedido.valor_total),
+                categoria: 'Venda de produto',
+                data: new Date().toISOString().split('T')[0],
+                observacoes: `Lançado automaticamente ao marcar pedido como pago`,
+              })
               await carregar()
             }}
             className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
           >
-            ✅ Marcar como pago
+            ✅ Marcar como pago — lança no caixa
           </button>
         </div>
       )}
