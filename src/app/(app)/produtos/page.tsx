@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Package, Boxes } from 'lucide-react'
+import { Plus, Package, Boxes, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 function formatCurrency(value: number) {
@@ -17,6 +17,16 @@ export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
+  const [excluindo, setExcluindo] = useState<string | null>(null)
+
+  async function excluirProduto(id: string, nome: string) {
+    if (!confirm(`Excluir "${nome}"? Ele não aparecerá mais em novos pedidos.`)) return
+    setExcluindo(id)
+    const supabase = createClient()
+    await supabase.from('produtos').update({ ativo: false }).eq('id', id)
+    setProdutos(p => p.filter(x => x.id !== id))
+    setExcluindo(null)
+  }
 
   useEffect(() => {
     async function carregar() {
@@ -99,17 +109,25 @@ export default function ProdutosPage() {
       ) : (
         <div className="space-y-3">
           {produtos.map((produto) => (
-            <Link
+            <div
               key={produto.id}
-              href={`/produtos/${produto.id}`}
-              className="block bg-white rounded-2xl p-4 border border-gray-100 shadow-sm active:scale-95 transition-all"
+              className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm"
             >
               <div className="flex items-start gap-3">
                 <div className="w-14 h-14 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
                   <Package size={24} className="text-green-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900">{produto.nome}</h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-semibold text-gray-900 leading-tight">{produto.nome}</h3>
+                    <button
+                      onClick={() => excluirProduto(produto.id, produto.nome)}
+                      disabled={excluindo === produto.id}
+                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                   <div className="flex items-center gap-3 mt-1.5">
                     <span className="text-sm font-bold text-gray-900">
                       {formatCurrency(produto.preco_venda)}
@@ -123,20 +141,9 @@ export default function ProdutosPage() {
                       💚 {formatCurrency(produto.lucro_unitario)} ({formatPercent(produto.margem_lucro)})
                     </span>
                   </div>
-                  <div className="mt-1.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      produto.estoque === 0
-                        ? 'bg-red-100 text-red-600'
-                        : produto.estoque <= 3
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      Estoque: {produto.estoque} un
-                    </span>
-                  </div>
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}
