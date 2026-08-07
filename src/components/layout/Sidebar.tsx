@@ -34,7 +34,7 @@ const MENU = [
     section: 'ESTOQUE',
     items: [
       { href: '/estoque', icon: Layers, label: 'Estoque' },
-      { href: '/materiais', icon: Package, label: 'Materiais' },
+      { href: '/configuracoes', icon: Package, label: 'Materiais' },
       { href: '/produtos', icon: Archive, label: 'Produtos' },
     ],
   },
