@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, Users, DollarSign,
   Package, Settings, PartyPopper, BarChart2, X, Menu,
-  Layers, Archive, TrendingUp
+  Layers, Archive, TrendingUp, PieChart
 } from 'lucide-react'
 
 const MENU = [
@@ -28,6 +28,7 @@ const MENU = [
     section: 'FINANCEIRO',
     items: [
       { href: '/financeiro', icon: DollarSign, label: 'Caixa' },
+      { href: '/divisao', icon: PieChart, label: 'Divisão de Lucros' },
     ],
   },
   {
