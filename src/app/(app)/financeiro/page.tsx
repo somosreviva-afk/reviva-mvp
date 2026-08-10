@@ -86,15 +86,21 @@ export default async function FinanceiroPage({
 
   // ── COMBINA E ORDENA TODAS AS MOVIMENTAÇÕES ────────────────────
   const raw: { key: string; data: string; descricao: string; categoria: string; tipo: 'entrada' | 'saida'; valor: number }[] = [
-    ...(todosPedidos || []).filter(p => p.tipo !== 'mimo' && p.pago === true && Number(p.valor_recebido || p.valor_total || 0) > 0).map(p => ({
+    // Só pedidos a partir de 10/08/2026 e apenas 1/3 (parte da Reviva)
+    ...(todosPedidos || []).filter(p =>
+      p.tipo !== 'mimo' &&
+      p.pago === true &&
+      Number(p.valor_total || 0) > 0 &&
+      p.created_at >= '2026-08-10'
+    ).map(p => ({
       key: `p-${p.id}`,
       data: p.created_at,
-      descricao: 'Venda',
+      descricao: 'Venda (parte Reviva)',
       categoria: p.forma_pagamento
         ? `Venda · ${p.forma_pagamento.replace('_', ' ')}`
         : 'Venda',
       tipo: 'entrada' as const,
-      valor: Number(p.valor_recebido || p.valor_total || 0),
+      valor: Math.round((Number(p.valor_total || 0) / 3) * 100) / 100,
     })),
     ...(todasCompras || []).map(c => ({
       key: `c-${c.id}`,
@@ -137,7 +143,7 @@ export default async function FinanceiroPage({
   // ── CARDS FIXOS ──────────────────────────────────────────────────
   const receitaGeral   = raw.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
   const saidasGeral    = raw.filter(m => m.tipo === 'saida').reduce((s, m) => s + m.valor, 0)
-  const custoProdGeral = (todosPedidos || []).reduce((s, p) => s + Number(p.custo_total_pedido || 0), 0)
+  const custoProdGeral = (todosPedidos || []).filter(p => p.created_at >= '2026-08-10').reduce((s, p) => s + Number(p.custo_total_pedido || 0) / 3, 0)
   const saidasManuaisGeral = (todasTransacoes || []).filter(t => t.tipo === 'saida').reduce((s, t) => s + Number(t.valor), 0)
   const totalCustosProducaoGeral = (todosCustosProducao || []).reduce((s, c) => s + Number(c.valor), 0)
   const lucroAcumulado = receitaGeral - custoProdGeral - saidasManuaisGeral - totalCustosProducaoGeral
