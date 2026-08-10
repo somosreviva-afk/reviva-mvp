@@ -143,7 +143,7 @@ export default async function FinanceiroPage({
   // ── CAIXA DA REVIVA (card principal) ────────────────────────────
   // = 1/3 da base + 1/3 de cada pedido novo - todas as saídas da Reviva
   const DATA_INICIO  = '2026-08-10'
-  const DIVISAO_BASE = 368.90
+  const DIVISAO_BASE = 363.92
 
   const rendaRevivaPedidos = (todosPedidos || [])
     .filter(p => p.pago === true && p.tipo !== 'mimo' && p.created_at >= DATA_INICIO)

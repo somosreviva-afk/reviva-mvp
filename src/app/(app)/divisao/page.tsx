@@ -7,7 +7,7 @@ const SOCIAS = [
 ]
 
 // Saldo de abertura (caixa do dia 10/08/2026) e data de início da divisão
-const SALDO_ABERTURA = 368.90
+const SALDO_ABERTURA = 363.92
 const DATA_INICIO    = '2026-08-10'
 
 function fmt(v: number) {
