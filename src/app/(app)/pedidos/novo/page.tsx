@@ -291,19 +291,6 @@ export default function NovoPedidoPage() {
       )
     }
 
-    // Lança no financeiro automaticamente se pedido já pago
-    if (!isMimo && pago && valorFinal > 0) {
-      await supabase.from('financeiro').insert({
-        empresa_id: usuario!.empresa_id,
-        tipo: 'entrada',
-        descricao: `Pedido #${pedido.numero} — ${clienteSelecionado.nome}`,
-        valor: valorFinal,
-        categoria: 'Venda de produto',
-        data: new Date().toISOString().split('T')[0],
-        observacoes: `Lançado automaticamente ao criar pedido`,
-      })
-    }
-
     router.push(`/pedidos/${pedido.id}`)
   }
 

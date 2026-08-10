@@ -86,7 +86,7 @@ export default async function FinanceiroPage({
 
   // ── COMBINA E ORDENA TODAS AS MOVIMENTAÇÕES ────────────────────
   const raw: { key: string; data: string; descricao: string; categoria: string; tipo: 'entrada' | 'saida'; valor: number }[] = [
-    ...(todosPedidos || []).filter(p => p.tipo !== 'mimo' && Number(p.valor_recebido || p.valor_total || 0) > 0).map(p => ({
+    ...(todosPedidos || []).filter(p => p.tipo !== 'mimo' && p.pago === true && Number(p.valor_recebido || p.valor_total || 0) > 0).map(p => ({
       key: `p-${p.id}`,
       data: p.created_at,
       descricao: 'Venda',
