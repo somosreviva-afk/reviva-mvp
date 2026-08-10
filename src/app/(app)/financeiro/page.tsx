@@ -137,12 +137,29 @@ export default async function FinanceiroPage({
     return { ...m, dataDisplay: fmtData(m.data), saldoApos: saldoCorrido }
   })
 
-  // Saldo em Conta = último saldo do corrido (caixa da Reviva)
+  // Saldo em Conta = último saldo do corrido (usado internamente)
   const saldoConta = saldoCorrido
 
-  // Total bruto faturado = soma de todos os pedidos pagos (valor cheio, das 3 sócias)
-  const totalFaturadoBruto = (todosPedidos || [])
-    .filter(p => p.pago === true && p.tipo !== 'mimo')
+  // ── CAIXA DA REVIVA (card principal) ────────────────────────────
+  // = 1/3 da base + 1/3 de cada pedido novo - todas as saídas da Reviva
+  const DATA_INICIO  = '2026-08-10'
+  const DIVISAO_BASE = 368.90
+
+  const rendaRevivaPedidos = (todosPedidos || [])
+    .filter(p => p.pago === true && p.tipo !== 'mimo' && p.created_at >= DATA_INICIO)
+    .reduce((s, p) => s + Number(p.valor_total || 0) / 3, 0)
+
+  const saidasReviva = [
+    ...(todasCompras || []).filter(c => (c.data + '') >= DATA_INICIO).map(c => Number(c.valor_pago || 0)),
+    ...(todasTransacoes || []).filter(t => t.tipo === 'saida' && (t.data + '') >= DATA_INICIO).map(t => Number(t.valor || 0)),
+    ...(todosCustosProducao || []).filter(c => (c.data + '') >= DATA_INICIO).map(c => Number(c.valor || 0)),
+  ].reduce((s, v) => s + v, 0)
+
+  const saldoReviva = Math.round(((DIVISAO_BASE / 3) + rendaRevivaPedidos - saidasReviva) * 100) / 100
+
+  // Total faturado = base + novos pedidos pagos a partir de 10/08/2026
+  const totalFaturadoBruto = DIVISAO_BASE + (todosPedidos || [])
+    .filter(p => p.pago === true && p.tipo !== 'mimo' && p.created_at >= DATA_INICIO)
     .reduce((s, p) => s + Number(p.valor_total || 0), 0)
 
   // ── CARDS FIXOS ──────────────────────────────────────────────────
@@ -190,13 +207,13 @@ export default async function FinanceiroPage({
       </div>
 
       {/* ── SALDO EM CONTA ───────────────────────────────────────────── */}
-      <div className={`rounded-2xl p-5 mb-3 ${saldoConta >= 0 ? 'bg-[#b5005e]' : 'bg-red-600'}`}>
+      <div className={`rounded-2xl p-5 mb-3 ${saldoReviva >= 0 ? 'bg-[#b5005e]' : 'bg-red-600'}`}>
         <div className="flex items-start justify-between mb-1">
           <p className="text-xs text-pink-200 font-medium uppercase tracking-widest">Caixa da Reviva</p>
           <Wallet size={22} className="text-pink-300" />
         </div>
-        <p className="text-4xl font-bold text-white mb-1">{formatCurrency(saldoConta)}</p>
-        <p className="text-[10px] text-pink-300 mb-4">o que a Reviva tem disponível hoje</p>
+        <p className="text-4xl font-bold text-white mb-1">{formatCurrency(saldoReviva)}</p>
+        <p className="text-[10px] text-pink-300 mb-4">1/3 do faturamento · saídas descontadas</p>
 
         {/* Total bruto faturado */}
         <div className="bg-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between">
