@@ -67,7 +67,7 @@ export default async function FinanceiroPage({
     { data: todosCustosProducao },
   ] = await Promise.all([
     supabase.from('pedidos')
-      .select('id, created_at, valor_recebido, valor_total, custo_total_pedido, tipo, forma_pagamento')
+      .select('id, created_at, valor_recebido, valor_total, custo_total_pedido, tipo, forma_pagamento, pago')
       .eq('empresa_id', empresaId).not('status', 'eq', 'cancelado')
       .order('created_at', { ascending: true }),
     supabase.from('movimentacoes_estoque')
@@ -137,8 +137,13 @@ export default async function FinanceiroPage({
     return { ...m, dataDisplay: fmtData(m.data), saldoApos: saldoCorrido }
   })
 
-  // Saldo em Conta = último saldo do corrido
+  // Saldo em Conta = último saldo do corrido (caixa da Reviva)
   const saldoConta = saldoCorrido
+
+  // Total bruto faturado = soma de todos os pedidos pagos (valor cheio, das 3 sócias)
+  const totalFaturadoBruto = (todosPedidos || [])
+    .filter(p => p.pago === true && p.tipo !== 'mimo')
+    .reduce((s, p) => s + Number(p.valor_total || 0), 0)
 
   // ── CARDS FIXOS ──────────────────────────────────────────────────
   const receitaGeral   = raw.filter(m => m.tipo === 'entrada').reduce((s, m) => s + m.valor, 0)
@@ -186,22 +191,22 @@ export default async function FinanceiroPage({
 
       {/* ── SALDO EM CONTA ───────────────────────────────────────────── */}
       <div className={`rounded-2xl p-5 mb-3 ${saldoConta >= 0 ? 'bg-[#b5005e]' : 'bg-red-600'}`}>
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="text-xs text-pink-200 font-medium uppercase tracking-widest">Saldo em Conta</p>
-            <p className="text-4xl font-bold text-white mt-1">{formatCurrency(saldoConta)}</p>
-            <p className="text-[10px] text-pink-300 mt-1">valor exato que deve existir na conta · não muda ao trocar o mês</p>
-          </div>
-          <Wallet size={26} className="text-pink-300" />
+        <div className="flex items-start justify-between mb-1">
+          <p className="text-xs text-pink-200 font-medium uppercase tracking-widest">Caixa da Reviva</p>
+          <Wallet size={22} className="text-pink-300" />
         </div>
-        <div className="flex gap-6 pt-3 border-t border-white/20">
+        <p className="text-4xl font-bold text-white mb-1">{formatCurrency(saldoConta)}</p>
+        <p className="text-[10px] text-pink-300 mb-4">o que a Reviva tem disponível hoje</p>
+
+        {/* Total bruto faturado */}
+        <div className="bg-white/10 rounded-xl px-4 py-2.5 flex items-center justify-between">
           <div>
-            <p className="text-[10px] text-pink-300">Total de entradas</p>
-            <p className="text-sm font-bold text-white">{formatCurrency(receitaGeral)}</p>
+            <p className="text-[10px] text-pink-200 uppercase tracking-wide">Total faturado (3 sócias)</p>
+            <p className="text-base font-bold text-white">{formatCurrency(totalFaturadoBruto)}</p>
           </div>
-          <div>
-            <p className="text-[10px] text-pink-300">Total de saídas</p>
-            <p className="text-sm font-bold text-pink-200">{formatCurrency(saidasGeral)}</p>
+          <div className="text-right">
+            <p className="text-[10px] text-pink-200">Cada sócia</p>
+            <p className="text-sm font-semibold text-pink-100">{formatCurrency(totalFaturadoBruto / 3)}</p>
           </div>
         </div>
       </div>
